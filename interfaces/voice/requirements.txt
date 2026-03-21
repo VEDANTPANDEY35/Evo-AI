@@ -1,0 +1,29 @@
+# Voice Assistant Dependencies
+
+# === OPTION 1: Simple Voice Assistant (Windows) ===
+# Recommended for Windows users - NO PyAudio needed!
+# Install with: pip install pywin32 pyttsx3 SpeechRecognition
+
+pywin32>=311  # Windows COM for SAPI
+pyttsx3>=2.90  # Text-to-Speech
+SpeechRecognition>=3.10.0  # Speech Recognition
+
+# === OPTION 2: Full Voice Assistant (All Platforms) ===
+# Requires PyAudio which can be difficult to install on Windows
+# Install with: pip install SpeechRecognition pyttsx3 pyaudio
+
+# SpeechRecognition>=3.10.0  # Already listed above
+# pyttsx3>=2.90  # Already listed above
+# PyAudio>=0.2.13  # Requires build tools on Windows!
+
+# === Windows PyAudio Installation ===
+# If you want PyAudio on Windows:
+# 1. Download pre-built wheel from: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
+# 2. Install: pip install PyAudio‑0.2.14‑cp314‑cp314‑win_amd64.whl
+# OR
+# 1. Install Visual C++ Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+# 2. Install: pip install pyaudio
+
+# === Recommendation ===
+# Windows users: Use voice_assistant_simple.py (no PyAudio)
+# Mac/Linux users: Use voice_assistant.py (with PyAudio)

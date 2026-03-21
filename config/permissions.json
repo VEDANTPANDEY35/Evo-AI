@@ -1,0 +1,10 @@
+{
+  "open_file": true,
+  "write_file": false,
+  "run_code": false,
+  "open_app": true,
+  "internet_access": false,
+  "read_system_info": true,
+  "open_browser": true,
+  "take_screenshot": true
+}
