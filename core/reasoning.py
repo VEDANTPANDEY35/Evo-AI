@@ -313,7 +313,7 @@ class Reasoner:
         ]
         if any(pattern in user_lower for pattern in self_patterns):
             # Check if asking about Evo-AI specifically
-            Evo-AI_indicators = ["you", "yourself", "Evo-AI", "this", "assistant", "ai"]
+            evo_ai_indicators = ["you", "yourself", "Evo-AI", "this", "assistant", "ai"]
             if any(indicator in user_lower for indicator in Evo-AI_indicators):
                 analysis.update({
                     "intent": "self_info",

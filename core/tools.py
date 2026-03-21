@@ -321,14 +321,14 @@ class SystemTools:
                 info["total_memory_mb"] = info["processes"]["Evo-AI"]["memory_mb"]
             
             # Disk usage
-            Evo-AI_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            Evo-AI_size = 0
+            Evo_AI_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            Evo_AI_size = 0
             for root, dirs, files in os.walk(Evo-AI_dir):
                 if 'venv' in root or '__pycache__' in root or '.git' in root:
                     continue
                 for file in files:
                     try:
-                        Evo-AI_size += os.path.getsize(os.path.join(root, file))
+                        Evo_AI_size += os.path.getsize(os.path.join(root, file))
                     except:
                         pass
             info["disk_usage_mb"] = round(Evo-AI_size / (1024**2), 2)

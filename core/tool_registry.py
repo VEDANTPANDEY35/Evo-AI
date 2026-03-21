@@ -112,7 +112,7 @@ class ToolRegistry:
         if risk_level:
             tools = [t for t in tools if t.risk_level == risk_level]
         
-        return [t.name for t in tools]
+        return tools
     
     def get_tool_descriptions(self, format: str = "text") -> str:
         """Get formatted tool descriptions for LLM."""
@@ -211,3 +211,7 @@ def get_registry(debug: bool = False) -> ToolRegistry:
     if _global_registry is None:
         _global_registry = ToolRegistry(debug=debug)
     return _global_registry
+
+def list_tools_by_category(self, category: str) -> List[ToolMetadata]:
+    """Return tool objects filtered by category."""
+    return [tool for tool in self._tools.values() if tool.category == category]
