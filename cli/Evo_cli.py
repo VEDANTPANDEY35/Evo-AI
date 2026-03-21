@@ -1,5 +1,5 @@
 """
-Kiro-Mogwai CLI - Main entry point with rich terminal UI
+Evo-AI CLI - Main entry point with rich terminal UI
 """
 import sys
 import os
@@ -25,7 +25,7 @@ from rich.live import Live
 console = Console()
 
 
-class KiroMogwai:
+class EvoAI:
     def __init__(self, debug: bool = False):
         self.debug = debug
         
@@ -53,7 +53,7 @@ class KiroMogwai:
         
         # Welcome panel
         welcome_text = Text()
-        welcome_text.append("🧩 Kiro-Mogwai\n", style="bold cyan")
+        welcome_text.append("🧩 Evo-AI\n", style="bold cyan")
         welcome_text.append("Your AI Desktop Assistant\n\n", style="dim")
         
         # Status
@@ -90,7 +90,7 @@ class KiroMogwai:
             console.print("  clear         - Clear chat history")
             console.print("  save          - Save current session")
             console.print("  status        - Show system status")
-            console.print("  exit / quit   - Exit Kiro-Mogwai")
+            console.print("  exit / quit   - Exit Evo-AI")
             
             console.print("\n[bold cyan]Quick Commands:[/bold cyan]")
             console.print("  system info         - Show hardware specs")
@@ -226,12 +226,12 @@ class KiroMogwai:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Kiro-Mogwai - Your local AI companion")
+    parser = argparse.ArgumentParser(description="Evo-AI - Your local AI companion")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
     
-    kiro = KiroMogwai(debug=args.debug)
-    kiro.run()
+    EvoAI = Evo-AIMogwai(debug=args.debug)
+    Evo-AI.run()
 
 
 if __name__ == "__main__":

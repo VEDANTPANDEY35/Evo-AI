@@ -1,5 +1,5 @@
 """
-Overlay Window - Pure UI layer for Kiro-Mogwai.
+Overlay Window - Pure UI layer for Evo-AI.
 NO AI logic, NO Brain imports, ONLY UI components.
 """
 import tkinter as tk
@@ -14,7 +14,7 @@ class OverlayWindow:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("Kiro")
+        self.root.title("Evo-AI")
         self.root.geometry("500x400")
         
         # Always on top

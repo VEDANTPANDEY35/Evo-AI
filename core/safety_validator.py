@@ -217,7 +217,7 @@ class SafetyValidator:
     def get_safe_temp_dir(self) -> Path:
         """Get safe temporary directory for code execution."""
         import tempfile
-        temp_base = Path(tempfile.gettempdir()) / "kiro_mogwai_sandbox"
+        temp_base = Path(tempfile.gettempdir()) / "Evo-AI_mogwai_sandbox"
         temp_base.mkdir(exist_ok=True)
         return temp_base
 

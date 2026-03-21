@@ -156,7 +156,7 @@ class SimpleVoiceAssistant:
             return
         
         try:
-            print(f"\n🔊 Kiro: {text}\n")
+            print(f"\n🔊 Evo-AI: {text}\n")
             self.speaker.Speak(text)
         except Exception as e:
             self._log(f"Speak error: {e}")
@@ -191,7 +191,7 @@ class SimpleVoiceAssistant:
         Architecture: Listen → Brain.process() → Speak → Loop
         """
         print("\n" + "="*50)
-        print("🎤 Kiro Simple Voice Assistant (Windows)")
+        print("🎤 Evo-AI Simple Voice Assistant (Windows)")
         print("="*50)
         
         if not self.brain.local_available:
@@ -208,7 +208,7 @@ class SimpleVoiceAssistant:
         print("\nReady! Start speaking or typing...\n")
         
         # Welcome message
-        self.speak("Hello! I'm Kiro, your voice assistant. How can I help you?")
+        self.speak("Hello! I'm Evo-AI, your voice assistant. How can I help you?")
         
         # Main loop
         while self.running:
@@ -241,7 +241,7 @@ def main():
     """Entry point for simple voice assistant."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Kiro Simple Voice Assistant (Windows)")
+    parser = argparse.ArgumentParser(description="Evo-AI Simple Voice Assistant (Windows)")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
     

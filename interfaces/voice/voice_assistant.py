@@ -1,5 +1,5 @@
 """
-Voice Assistant - Voice I/O layer for Kiro-Mogwai.
+Voice Assistant - Voice I/O layer for Evo-AI.
 Handles speech-to-text, text-to-speech, and microphone input.
 NO reasoning, NO tools, NO memory - ONLY I/O.
 """
@@ -28,7 +28,7 @@ except ImportError:
 
 class VoiceAssistant:
     """
-    Voice interface for Kiro-Mogwai.
+    Voice interface for Evo-AI.
     Architecture: Voice (I/O) → Brain (logic) → Core
     """
     
@@ -138,7 +138,7 @@ class VoiceAssistant:
             return
         
         try:
-            print(f"\n🔊 Kiro: {text}\n")
+            print(f"\n🔊 Evo-AI: {text}\n")
             self.tts_engine.say(text)
             self.tts_engine.runAndWait()
         except Exception as e:
@@ -174,7 +174,7 @@ class VoiceAssistant:
         Architecture: Listen → Brain.process() → Speak → Loop
         """
         print("\n" + "="*50)
-        print("🎤 Kiro Voice Assistant")
+        print("🎤 Evo-AI Voice Assistant")
         print("="*50)
         
         if not self.brain.local_available:
@@ -190,7 +190,7 @@ class VoiceAssistant:
         print("\nReady! Start speaking...\n")
         
         # Welcome message
-        self.speak("Hello! I'm Kiro, your voice assistant. How can I help you?")
+        self.speak("Hello! I'm Evo-AI, your voice assistant. How can I help you?")
         
         # Main loop
         while self.running:
@@ -219,7 +219,7 @@ def main():
     """Entry point for voice assistant."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Kiro Voice Assistant")
+    parser = argparse.ArgumentParser(description="Evo-AI Voice Assistant")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
     

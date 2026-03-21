@@ -1,4 +1,4 @@
-# 🏗️ Kiro-Mogwai - Complete Architecture Documentation
+# 🏗️ Evo-AI - Complete Architecture Documentation
 
 > **Offline-first AI Desktop Assistant with System Control**
 
@@ -23,9 +23,9 @@
 
 ## Overview
 
-### What is Kiro-Mogwai?
+### What is Evo-AI?
 
-Kiro-Mogwai is a **production-quality AI desktop assistant** that runs entirely on your computer. It combines ChatGPT-quality conversations with actual system control capabilities - all while keeping your data private and working completely offline.
+Evo-AI is a **production-quality AI desktop assistant** that runs entirely on your computer. It combines ChatGPT-quality conversations with actual system control capabilities - all while keeping your data private and working completely offline.
 
 ### Key Features
 
@@ -41,7 +41,7 @@ Kiro-Mogwai is a **production-quality AI desktop assistant** that runs entirely 
 
 **Your laptop can easily handle it!**
 
-- **Kiro-Mogwai**: ~25-50 MB RAM (very lightweight!)
+- **Evo-AI**: ~25-50 MB RAM (very lightweight!)
 - **Ollama (idle)**: ~30-100 MB RAM
 - **Ollama (active)**: ~1.5-2.5 GB RAM when generating responses
 - **Disk space**: ~2 GB total (0.3 MB code + 1.9 GB AI model)
@@ -64,15 +64,15 @@ ollama pull llama3.2:latest
 ### 2. Install Dependencies
 
 ```bash
-cd kiro_mogwai_local
+cd Evo-AI_mogwai_local
 pip install -r requirements.txt
 ```
 
-### 3. Run Kiro
+### 3. Run Evo-AI
 
 **Terminal Interface (CLI)**:
 ```bash
-python cli/kiro_cli.py
+python cli/Evo-AI_cli.py
 ```
 
 **Windows Overlay (GUI)**:
@@ -107,7 +107,7 @@ You: open chrome and search for AI tutorials
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      CLI INTERFACE                          │
-│                    (kiro_cli.py)                            │
+│                    (Evo-AI_cli.py)                            │
 │  • Rich terminal UI with colors                            │
 │  • Command handling and history                            │
 │  • Session management                                       │
@@ -179,7 +179,7 @@ You: open chrome and search for AI tutorials
 
 ### Hybrid Intelligence (3-Tier System)
 
-Kiro uses a smart routing system that balances speed and capability:
+Evo-AI uses a smart routing system that balances speed and capability:
 
 **Tier 1: Conversational Detection** (Instant)
 - Detects: "hi", "hello", "tell me", "explain", "what is"
@@ -507,7 +507,7 @@ For each step:
 - `permissions` - Show current permissions
 - `history` - Show execution history
 - `clear` - Clear chat history
-- `exit` / `quit` - Exit Kiro-Mogwai
+- `exit` / `quit` - Exit Evo-AI
 
 **Quick Actions**:
 ```
@@ -520,9 +520,9 @@ take screenshot          - Capture screen
 
 **Natural Language**:
 ```
-hi / hello                                    - Greet Kiro
+hi / hello                                    - Greet Evo-AI
 tell me about python                          - Ask questions
-how much memory do you use?                   - Check Kiro's resource usage
+how much memory do you use?                   - Check Evo-AI's resource usage
 create a file called test.py with hello world - File operations
 search for python files                       - Search files
 open youtube                                  - Open websites
@@ -531,7 +531,7 @@ open chrome and search for AI tutorials       - Compound instructions
 
 ### Compound Instructions
 
-Kiro can execute multiple commands in sequence with improved deterministic parsing:
+Evo-AI can execute multiple commands in sequence with improved deterministic parsing:
 
 **Supported Connectors** (9 types):
 - "and" - `open chrome and search youtube`
@@ -578,7 +578,7 @@ open explorer, find report.pdf from desktop, then open it
 **System Information (3)**:
 - `get_system_info` - Hardware and system info
 - `get_network_info` - Network information
-- `get_self_info` - Kiro's own resource usage
+- `get_self_info` - Evo-AI's own resource usage
 
 **Process Management (2)**:
 - `list_processes` - List running processes
@@ -605,9 +605,9 @@ open explorer, find report.pdf from desktop, then open it
 ### Project Structure
 
 ```
-kiro_mogwai_local/
+Evo-AI_mogwai_local/
 ├── cli/
-│   └── kiro_cli.py              # Terminal interface
+│   └── Evo-AI_cli.py              # Terminal interface
 ├── core/
 │   ├── brain.py                 # Pure logic orchestrator
 │   ├── reasoning.py             # Intent detection
@@ -786,7 +786,7 @@ OLLAMA_MODEL=llama3.2:latest
 
 ### Resource Usage
 
-- **Kiro-Mogwai**: 25-50 MB RAM
+- **Evo-AI**: 25-50 MB RAM
 - **Ollama (idle)**: 30-100 MB RAM
 - **Ollama (active)**: 1.5-2.5 GB RAM
 - **Disk space**: ~2 GB total
@@ -848,7 +848,7 @@ OLLAMA_MODEL=llama3.2:latest
 
 ### Terminal Interface (CLI)
 
-**Location**: `cli/kiro_cli.py`
+**Location**: `cli/Evo-AI_cli.py`
 
 **Features**:
 - Rich terminal UI with colors and formatting
@@ -859,7 +859,7 @@ OLLAMA_MODEL=llama3.2:latest
 
 **Usage**:
 ```bash
-python cli/kiro_cli.py
+python cli/Evo-AI_cli.py
 ```
 
 **Flow**:
@@ -945,7 +945,7 @@ python main.py
 
 ### Overview
 
-Kiro-Mogwai supports execution gating - separating plan generation from execution to give users control.
+Evo-AI supports execution gating - separating plan generation from execution to give users control.
 
 ### Brain Methods
 

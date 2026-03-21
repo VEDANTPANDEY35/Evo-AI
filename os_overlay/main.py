@@ -1,5 +1,5 @@
 """
-Kiro-Mogwai Windows Overlay - Main Entry Point
+Evo-AI Windows Overlay - Main Entry Point
 Minimal Tkinter-based overlay prototype.
 """
 import sys
@@ -24,7 +24,7 @@ def main():
     """
     Initialize Brain and start Tkinter overlay.
     """
-    print("Initializing Kiro-Mogwai Overlay...")
+    print("Initializing Evo-AI Overlay...")
     
     # Initialize core components (unchanged)
     reasoner = Reasoner(debug=False)

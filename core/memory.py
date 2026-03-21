@@ -36,14 +36,14 @@ class Memory:
             self._log(f"Error loading personality: {e}")
         
         return {
-            "name": "Kiro-Mogwai",
+            "name": "Evo-AI",
             "identity": "I am your local assistant.",
             "principles": []
         }
     
     def get_system_prompt(self) -> str:
         """Generate system prompt optimized for fast, accurate responses."""
-        return """You are Kiro, a helpful desktop AI assistant with access to system tools.
+        return """You are Evo-AI, a helpful desktop AI assistant with access to system tools.
 
 Core Principles:
 - Be concise and direct - avoid unnecessary explanations

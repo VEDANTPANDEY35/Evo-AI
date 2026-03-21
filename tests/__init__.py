@@ -1,3 +1,3 @@
 """
-Test suite for Kiro-Mogwai.
+Test suite for Evo-AI.
 """

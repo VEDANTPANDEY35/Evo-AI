@@ -1,5 +1,5 @@
 """
-Global hotkey registration for Kiro-Mogwai overlay.
+Global hotkey registration for Evo-AI overlay.
 Event-driven, no polling loops.
 """
 import keyboard

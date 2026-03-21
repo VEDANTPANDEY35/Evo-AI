@@ -67,7 +67,7 @@ context = brain.context_engine.get_surface_context()
 {
     'mode': 'surface',
     'system': {'os': 'Windows', 'username': 'VEDANT', 'memory_gb': 15.73},
-    'active_window': 'file.py - Kiro',
+    'active_window': 'file.py - Evo-AI',
     'top_processes': [...],
     'workspace': {
         'current_directory': {...},
@@ -95,7 +95,7 @@ analysis = brain.context_engine.analyze_project('.')
 ```python
 {
     'mode': 'deep_project',
-    'name': 'kiro_mogwai_local',
+    'name': 'Evo-AI_mogwai_local',
     'type': 'python',
     'root': '/path/to/project',
     'structure': {
@@ -200,10 +200,10 @@ Surface context gathered in 474.33ms
 Mode: surface
 OS: Windows
 Username: VEDANT
-Active Window: file.py - Kiro
+Active Window: file.py - Evo-AI
 Top Processes: 5
 
-Project: kiro_mogwai_local
+Project: Evo-AI_mogwai_local
 Type: python
 Files: 126
 Folders: 12
@@ -256,7 +256,7 @@ print(summary)
 # === Surface Context ===
 # OS: Windows (VEDANT)
 # Memory: 15.73GB
-# Active: file.py - Kiro
+# Active: file.py - Evo-AI
 # Directory: project (46 files)
 ```
 

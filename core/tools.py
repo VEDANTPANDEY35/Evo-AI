@@ -202,7 +202,7 @@ class SystemTools:
         # Self-awareness
         registry.register_tool(ToolMetadata(
             name="get_self_info",
-            description="Get information about Kiro-Mogwai's own resource usage and status",
+            description="Get information about Evo-AI's own resource usage and status",
             function=self.get_self_info,
             parameters=[],
             risk_level=RiskLevel.SAFE,
@@ -278,21 +278,21 @@ class SystemTools:
             return {"error": str(e)}
     
     def get_self_info(self) -> Dict[str, Any]:
-        """Get information about Kiro-Mogwai's own resource usage."""
+        """Get information about Evo-AI's own resource usage."""
         try:
             import os
             
             info = {
-                "name": "Kiro-Mogwai",
+                "name": "Evo-AI",
                 "version": "1.0.0",
                 "status": "running",
                 "processes": {}
             }
             
-            # Find Kiro process (current)
+            # Find Evo-AI process (current)
             current_pid = os.getpid()
             current_proc = psutil.Process(current_pid)
-            info["processes"]["kiro"] = {
+            info["processes"]["Evo-AI"] = {
                 "pid": current_pid,
                 "memory_mb": round(current_proc.memory_info().rss / (1024**2), 1),
                 "cpu_percent": current_proc.cpu_percent(interval=0.1)
@@ -315,23 +315,23 @@ class SystemTools:
             if ollama_procs:
                 info["processes"]["ollama"] = ollama_procs
                 total_ollama_mem = sum(p["memory_mb"] for p in ollama_procs)
-                info["total_memory_mb"] = round(info["processes"]["kiro"]["memory_mb"] + total_ollama_mem, 1)
+                info["total_memory_mb"] = round(info["processes"]["Evo-AI"]["memory_mb"] + total_ollama_mem, 1)
             else:
                 info["processes"]["ollama"] = "not running"
-                info["total_memory_mb"] = info["processes"]["kiro"]["memory_mb"]
+                info["total_memory_mb"] = info["processes"]["Evo-AI"]["memory_mb"]
             
             # Disk usage
-            kiro_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            kiro_size = 0
-            for root, dirs, files in os.walk(kiro_dir):
+            Evo-AI_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            Evo-AI_size = 0
+            for root, dirs, files in os.walk(Evo-AI_dir):
                 if 'venv' in root or '__pycache__' in root or '.git' in root:
                     continue
                 for file in files:
                     try:
-                        kiro_size += os.path.getsize(os.path.join(root, file))
+                        Evo-AI_size += os.path.getsize(os.path.join(root, file))
                     except:
                         pass
-            info["disk_usage_mb"] = round(kiro_size / (1024**2), 2)
+            info["disk_usage_mb"] = round(Evo-AI_size / (1024**2), 2)
             
             # Model info
             ollama_dir = os.path.expanduser("~/.ollama/models")
@@ -363,7 +363,7 @@ class SystemTools:
         output.append("")
         
         output.append("💾 Memory Usage:")
-        output.append(f"  Kiro-Mogwai: {info['processes']['kiro']['memory_mb']} MB")
+        output.append(f"  Evo-AI: {info['processes']['Evo-AI']['memory_mb']} MB")
         
         if isinstance(info['processes']['ollama'], list):
             for proc in info['processes']['ollama']:
@@ -374,13 +374,13 @@ class SystemTools:
         
         output.append("")
         output.append("💿 Disk Usage:")
-        output.append(f"  Kiro code: {info['disk_usage_mb']} MB")
+        output.append(f"  Evo-AI code: {info['disk_usage_mb']} MB")
         if "model_disk_usage_gb" in info:
             output.append(f"  AI models: {info['model_disk_usage_gb']} GB")
         
         output.append("")
         output.append("📊 Performance:")
-        output.append(f"  Lightweight: Kiro uses minimal resources")
+        output.append(f"  Lightweight: Evo-AI uses minimal resources")
         output.append(f"  Efficient: Only active when generating responses")
         output.append(f"  Scalable: Adapts to your hardware")
         

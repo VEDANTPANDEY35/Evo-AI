@@ -306,15 +306,15 @@ class Reasoner:
             })
             return analysis
         
-        # Self info (questions about Kiro itself)
+        # Self info (questions about Evo-AI itself)
         self_patterns = [
             "how much", "resource", "your resource", "you use", "you take", "you need",
             "about yourself", "about you", "your usage", "your memory"
         ]
         if any(pattern in user_lower for pattern in self_patterns):
-            # Check if asking about Kiro specifically
-            kiro_indicators = ["you", "yourself", "kiro", "this", "assistant", "ai"]
-            if any(indicator in user_lower for indicator in kiro_indicators):
+            # Check if asking about Evo-AI specifically
+            Evo-AI_indicators = ["you", "yourself", "Evo-AI", "this", "assistant", "ai"]
+            if any(indicator in user_lower for indicator in Evo-AI_indicators):
                 analysis.update({
                     "intent": "self_info",
                     "actions": ["get_self_info"],
