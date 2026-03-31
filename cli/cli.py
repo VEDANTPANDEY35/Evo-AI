@@ -230,8 +230,8 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
     
-    EvoAI = Evo-AIMogwai(debug=args.debug)
-    Evo-AI.run()
+    evo_ai = EvoAI(debug=args.debug)
+    evo_ai.run()
 
 
 if __name__ == "__main__":
