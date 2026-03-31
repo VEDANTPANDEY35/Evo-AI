@@ -14,32 +14,34 @@ pipeline {
             }
         }
 
+        stage('Install Dependencies') {
+            steps {
+                bat 'pip install -r requirements.txt'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                bat 'pytest'
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
-                script {
-                    sh 'docker build -t $IMAGE_NAME .'
-                }
+                bat 'docker build -t %IMAGE_NAME% .'
             }
         }
 
         stage('Stop Old Container') {
             steps {
-                script {
-                    sh 'docker stop $CONTAINER_NAME || true'
-                    sh 'docker rm $CONTAINER_NAME || true'
-                }
+                bat 'docker stop %CONTAINER_NAME% || exit 0'
+                bat 'docker rm %CONTAINER_NAME% || exit 0'
             }
         }
 
         stage('Run Container') {
             steps {
-                script {
-                    sh '''
-                    docker run -d \
-                    --name $CONTAINER_NAME \
-                    $IMAGE_NAME
-                    '''
-                }
+                bat 'docker run -d --name %CONTAINER_NAME% %IMAGE_NAME%'
             }
         }
     }
