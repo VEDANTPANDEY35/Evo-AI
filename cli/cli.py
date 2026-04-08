@@ -238,3 +238,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def run_ai(user_input: str):
+    evo_ai = EvoAI(debug=False)
+    
+    # Directly process request without loop
+    try:
+        plan = evo_ai.brain.generate_plan(user_input)
+        result = evo_ai.brain.execute_plan(plan)
+        
+        return result.message if result.success else "Error: " + result.message
+    except Exception as e:
+        return f"Error: {str(e)}"
