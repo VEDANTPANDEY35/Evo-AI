@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV PYTHONPATH=/app
 
 # Run Evo-AI CLI
-CMD ["python", "cli/cli.py"]
+CMD ["tail", "-f", "/dev/null"]

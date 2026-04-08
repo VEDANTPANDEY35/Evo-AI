@@ -226,6 +226,7 @@ class EvoAI:
 
 
 def main():
+    print("Evo-AI Version 1 🚀")
     parser = argparse.ArgumentParser(description="Evo-AI - Your local AI companion")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()

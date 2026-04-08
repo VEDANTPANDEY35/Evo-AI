@@ -13,7 +13,6 @@ spec:
         app: evo-ai
     spec:
       containers:
-      - name: evo-ai
-        image: evo-ai:latest
-        imagePullPolicy: Never
-        command: ["python", "cli/cli.py"]
+        - name: evo-ai
+          image: vedant3530/evo-ai:latest
+          imagePullPolicy: Always
