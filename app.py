@@ -1,15 +1,15 @@
 from flask import Flask, request, jsonify
-from cli.cli import run_ai   # adjust if needed
+from cli.cli import main as run_ai   # FIXED import
+
+print("🚀 Evo-AI Version 3 STARTED", flush=True)
 
 app = Flask(__name__)
 
 # Home route (for browser)
 @app.route("/")
 def home():
-    print("Evo-AI Version 2 🚀", flush=True)  # visible in docker logs
-
     return """
-    <h2>Evo-AI Version 2 🚀</h2>
+    <h2>Evo-AI Version 3 🚀</h2>
     <form method="post" action="/ask">
         <input name="input" placeholder="Ask something"/>
         <button type="submit">Send</button>
