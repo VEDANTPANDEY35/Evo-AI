@@ -1,7 +1,7 @@
 """
 Evo-AI CLI - Main entry point with rich terminal UI
 """
-print("Evo-AI Version 1 🚀", flush=True)
+print("Evo-AI Version 2 🚀", flush=True)
 import sys
 import os
 import argparse
