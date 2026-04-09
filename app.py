@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from cli.cli import main as run_ai   # <-- adjust this
+from cli.cli import run_ai   # <-- adjust this
 
 app = Flask(__name__)
 

@@ -240,13 +240,28 @@ if __name__ == "__main__":
     main()
 
 def run_ai(user_input: str):
-    evo_ai = EvoAI(debug=False)
-    
-    # Directly process request without loop
+    """
+    API-safe wrapper for EvoAI.
+    No interactive input, no confirmation, always returns response.
+    """
     try:
+        if not user_input:
+            return "No input provided"
+
+        evo_ai = EvoAI(debug=False)
+
+        # Generate plan
         plan = evo_ai.brain.generate_plan(user_input)
+
+        # 🚨 IMPORTANT: Skip confirmation (API cannot handle input())
+        # Direct execution
         result = evo_ai.brain.execute_plan(plan)
-        
-        return result.message if result.success else "Error: " + result.message
+
+        # Return safe response
+        if hasattr(result, "success") and result.success:
+            return result.message if hasattr(result, "message") else str(result)
+        else:
+            return result.message if hasattr(result, "message") else "Execution failed"
+
     except Exception as e:
         return f"Error: {str(e)}"
