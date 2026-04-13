@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from cli.cli import main as run_ai   # FIXED import
 
-print("🚀 Evo-AI Version 3 STARTED", flush=True)
+print("🚀 Evo-AI Version 4 STARTED", flush=True)
 
 app = Flask(__name__)
 
