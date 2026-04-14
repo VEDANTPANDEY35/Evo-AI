@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from cli.cli import main as run_ai   # FIXED import
 
-print("🚀 Evo-AI Version 7 STARTED", flush=True)
+print("🚀 Evo-AI Version 8 STARTED", flush=True)
 
 app = Flask(__name__)
 
@@ -9,7 +9,7 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     return """
-    <h2>Evo-AI Version 7 🚀</h2>
+    <h2>Evo-AI Version 8 🚀</h2>
     <form method="post" action="/ask">
         <input name="input" placeholder="Ask something"/>
         <button type="submit">Send</button>
