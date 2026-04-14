@@ -227,7 +227,7 @@ class EvoAI:
 
 
 def main():
-    print("Evo-AI Version 1 🚀")
+    print("Evo-AI Version 9 🚀", flush=true)
     parser = argparse.ArgumentParser(description="Evo-AI - Your local AI companion")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
@@ -259,9 +259,10 @@ def run_ai(user_input: str):
 
         # Return safe response
         if hasattr(result, "success") and result.success:
-            return result.message if hasattr(result, "message") else str(result)
-        else:
-            return result.message if hasattr(result, "message") else "Execution failed"
+    base_response = result.message if hasattr(result, "message") else str(result)
+    return f"🔥 Version 9 CLI Response:\n{base_response}"
+else:
+    return result.message if hasattr(result, "message") else "Execution failed"
 
     except Exception as e:
         return f"Error: {str(e)}"
