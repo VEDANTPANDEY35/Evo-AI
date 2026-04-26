@@ -227,7 +227,6 @@ class EvoAI:
 
 
 def main():
-    print("Evo-AI Version 9 🚀", flush=true)
     parser = argparse.ArgumentParser(description="Evo-AI - Your local AI companion")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
@@ -242,27 +241,47 @@ if __name__ == "__main__":
 def run_ai(user_input: str):
     """
     API-safe wrapper for EvoAI.
-    No interactive input, no confirmation, always returns response.
+    - No interactive input
+    - No confirmation prompts
+    - Handles debugger responses
+    - Always returns a string
     """
     try:
-        if not user_input:
+        # Basic validation
+        if not user_input or not user_input.strip():
             return "No input provided"
 
+        # Initialize system
         evo_ai = EvoAI(debug=False)
 
-        # Generate plan
+        # Generate plan (may include debugger report)
         plan = evo_ai.brain.generate_plan(user_input)
 
-        # 🚨 IMPORTANT: Skip confirmation (API cannot handle input())
-        # Direct execution
+        # 🧠 Handle debugger case (no execution)
+        if hasattr(plan, "debug_report") and plan.debug_report:
+            report = plan.debug_report
+
+            message = getattr(report, "message", "I couldn't process that request.")
+            suggestions = getattr(report, "suggestions", [])
+
+            response = f"⚠️ {message}\n"
+
+            if suggestions:
+                response += "\nSuggestions:\n"
+                for i, s in enumerate(suggestions, 1):
+                    response += f"{i}. {s}\n"
+
+            return response.strip()
+
+        # 🚀 Normal execution path
         result = evo_ai.brain.execute_plan(plan)
 
-        # Return safe response
+        # ✅ Success case
         if hasattr(result, "success") and result.success:
-    base_response = result.message if hasattr(result, "message") else str(result)
-    return f"🔥 Version 9 CLI Response:\n{base_response}"
-else:
-    return result.message if hasattr(result, "message") else "Execution failed"
+            return result.message if hasattr(result, "message") else str(result)
+
+        # ❌ Failure case (structured)
+        return result.message if hasattr(result, "message") else "Execution failed"
 
     except Exception as e:
         return f"Error: {str(e)}"

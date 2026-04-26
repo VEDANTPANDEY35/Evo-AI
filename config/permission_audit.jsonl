@@ -175,3 +175,7 @@
 {"timestamp": "2026-04-07T14:25:29.807164", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "powerpoint"}}
 {"timestamp": "2026-04-07T14:25:47.700684", "action": "open_website", "permission": "open_browser", "response": "allow_always", "reason": "Pre-granted", "context": {"site_name": "gmail"}}
 {"timestamp": "2026-04-07T14:26:23.388983", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "photoshop"}}
+{"timestamp": "2026-04-27T01:02:14.014411", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "chrome.exe"}}
+{"timestamp": "2026-04-27T01:02:30.212910", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "chrome.exe"}}
+{"timestamp": "2026-04-27T01:02:47.244913", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "chrome.exe"}}
+{"timestamp": "2026-04-27T01:02:59.732224", "action": "open_website", "permission": "open_browser", "response": "allow_always", "reason": "Pre-granted", "context": {"site_name": "spotify", "url": "https://open.spotify.com"}}

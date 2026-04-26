@@ -191,7 +191,8 @@ class SystemTools:
             description="Open a specific website directly in the browser",
             function=self.open_website,
             parameters=[
-                ToolParameter(name="site_name", type="string", required=True)
+                ToolParameter(name="site_name", type="string", required=True),
+                ToolParameter(name="url", type="string", required=False, default=None)
             ],
             risk_level=RiskLevel.SAFE,
             permissions_required=["open_browser"],
@@ -421,63 +422,54 @@ class SystemTools:
         return "\n".join(output)
     
     def open_application(self, app_name: str) -> str:
-        """Open an application.
+        """Open an application using the resolution pipeline.
 
-        Uses the TargetResolver to find the best executable path.
-        Falls back to web search if the app cannot be found locally.
+        Uses resolved_path from the resolver when available (full path from
+        Everything CLI, or exe name from known-apps list).
+        Does NOT silently fall back to web search — that decision belongs
+        to the execution layer after user confirmation.
         """
         try:
             self._log(f"Opening application: {app_name}")
 
-            # ── Resolution Pipeline ──────────────────────────────────────────
             from .resolution.target_resolver import TargetResolver
-            resolver = TargetResolver(debug=self.debug)
-            resolution = resolver.resolve(app_name.lower().strip())
+            resolution = TargetResolver(debug=self.debug).resolve(app_name.lower().strip())
 
-            if resolution.type == "website":
-                # Resolver determined this is a web target (e.g. tinkercad)
-                return self.open_website(app_name)
+            if resolution.category == "web_search" and resolution.confidence == "high":
+                # Resolver says this is a known website (e.g. "teams", "outlook")
+                return self.open_website(app_name, url=resolution.resolved_path)
 
-            elif resolution.type == "web_search":
-                # App not found locally — search the web for it
-                self._log(f"App '{app_name}' not found — routing to web search")
-                return self.search_web(app_name)
+            if resolution.category != "application":
+                # Not found locally — return a clear failure message.
+                # The execution layer (brain/executor) decides whether to search.
+                return f"✗ Application '{app_name}' not found on this system"
 
-            # resolution.type == "application" — use resolved value
-            resolved_name = resolution.value if resolution.type == "application" else app_name
-            # ── End Resolution Pipeline ──────────────────────────────────────
+            resolved = resolution.resolved_path or app_name
 
-            # Special handling for browsers — use full path via BrowserAutomation
-            if resolved_name.lower().replace(".exe", "") in ["brave", "chrome", "firefox", "edge"]:
+            # Special handling for browsers — use BrowserAutomation path lookup
+            browser_names = {"brave", "chrome", "firefox", "edge"}
+            base_name = resolved.lower().removesuffix(".exe")
+            if base_name in browser_names:
                 from .browser_automation import BrowserAutomation
                 browser_auto = BrowserAutomation(debug=self.debug)
-                browser_key = resolved_name.lower().replace(".exe", "")
-
                 browser_path = None
                 for path in browser_auto.BROWSER_PATHS.get(self.platform, []):
-                    if browser_key in path.lower() and os.path.exists(path):
+                    if base_name in path.lower() and os.path.exists(path):
                         browser_path = path
                         break
-
                 if browser_path:
-                    if self.platform == "Windows":
-                        subprocess.Popen([browser_path])
-                    elif self.platform == "Darwin":
-                        subprocess.Popen(["open", "-a", browser_path])
-                    else:
-                        subprocess.Popen([browser_path])
+                    subprocess.Popen([browser_path])
                     return f"✓ Opened {app_name.title()}"
-                else:
-                    return f"✗ {app_name.title()} not found on your system"
+                return f"✗ {app_name.title()} not found on your system"
 
-            # If Everything gave us a full path, use it directly
-            if os.path.isabs(resolved_name) and os.path.isfile(resolved_name):
-                subprocess.Popen([resolved_name])
+            # Full absolute path from Everything CLI — launch directly
+            if os.path.isabs(resolved) and os.path.isfile(resolved):
+                subprocess.Popen([resolved])
                 return f"✓ Opened {app_name}"
 
-            # Regular applications — use OS adapter
-            success = self.adapter.open_application(resolved_name)
-            return f"✓ Opened {app_name}" if success else f"✗ Error opening {app_name}"
+            # Executable name — let the OS adapter resolve via PATH/registry
+            success = self.adapter.open_application(resolved)
+            return f"✓ Opened {app_name}" if success else f"✗ Could not open {app_name}"
 
         except Exception as e:
             self._log(f"Error opening application: {e}")
@@ -732,40 +724,37 @@ class SystemTools:
             self._log(f"Error searching web: {e}")
             return f"✗ Error searching web: {e}"
     
-    def open_website(self, site_name: str) -> str:
-        """Open a specific website directly in the browser.
+    def open_website(self, site_name: str, url: str = None) -> str:
+        """Open a specific website in the browser.
 
-        Uses the TargetResolver to look up the canonical URL.
-        Never guesses URLs — if the site is unknown, falls back to a web search.
+        If a pre-resolved URL is provided (from the resolver), use it directly.
+        Otherwise, ask the resolver. Never guesses URLs.
         """
         try:
-            from .resolution.target_resolver import TargetResolver
             from .browser_automation import BrowserAutomation
-
-            resolver = TargetResolver(debug=self.debug)
-            resolution = resolver.resolve(site_name.lower().strip())
-
             browser = BrowserAutomation(debug=self.debug)
 
-            if resolution.type == "website":
-                url = resolution.value
+            # Use pre-resolved URL if the caller already has it
+            if url and url.startswith("http"):
                 success, message = browser.open_url(url)
                 if success:
                     return f"✓ Opened {site_name} ({url})"
-                else:
-                    return f"✗ Error opening {site_name}: {message}"
+                return f"✗ Error opening {site_name}: {message}"
 
-            elif resolution.type == "web_search":
-                # Site not in known list — search for it instead of guessing URL
-                self._log(f"Unknown site '{site_name}' — falling back to web search")
-                success, message = browser.search(site_name, "google")
+            # Otherwise ask the resolver
+            from .resolution.target_resolver import TargetResolver
+            resolution = TargetResolver(debug=self.debug).resolve(site_name.lower().strip())
+
+            if resolution.category == "web_search" and resolution.resolved_path:
+                # Known website — resolved_path holds the canonical URL
+                success, message = browser.open_url(resolution.resolved_path)
                 if success:
-                    return f"✓ Searching for '{site_name}' (site not in known list)"
-                else:
-                    return f"✗ Error searching for {site_name}: {message}"
+                    return f"✓ Opened {site_name} ({resolution.resolved_path})"
+                return f"✗ Error opening {site_name}: {message}"
 
-            else:
-                return f"✗ Could not resolve website: {site_name}"
+            # Not a known website — search for it instead of guessing
+            self._log(f"Unknown site '{site_name}' — falling back to web search")
+            return self.search_web(site_name)
 
         except Exception as e:
             self._log(f"Error opening website: {e}")

@@ -370,59 +370,67 @@ class Reasoner:
                 })
             else:
                 # ── Resolution Pipeline ──────────────────────────────────────
-                # Step 1: Normalize (typo correction + alias expansion)
+                # Step 1: Normalize target (typo correction + alias expansion)
                 normalized_target, was_changed = self._normalizer.normalize_target(raw_target)
                 if was_changed:
                     self._log(f"Normalized '{raw_target}' → '{normalized_target}'")
 
-                # Step 2: Resolve (website / application / web_search / unknown)
+                # Step 2: Resolve — returns category + confidence, never guesses
                 resolution = self._resolver.resolve(normalized_target)
-                self._log(f"Resolution: type={resolution.type} value={resolution.value}")
+                self._log(f"Resolution: category={resolution.category} confidence={resolution.confidence}")
 
-                if resolution.type == "website":
-                    analysis.update({
-                        "intent": "open_website",
-                        "actions": ["open_website"],
-                        "params": {"site_name": normalized_target},
-                        "requires_permission": ["open_browser"],
-                        "confidence": "high",
-                        "resolution": resolution.meta
-                    })
-
-                elif resolution.type == "application":
+                if resolution.category == "application":
+                    # Use resolved_path (full path from Everything, or exe name from known-apps)
+                    app_value = resolution.resolved_path or normalized_target
                     analysis.update({
                         "intent": "open_app",
                         "actions": ["open_application"],
-                        "params": {"app_name": resolution.value},
+                        "params": {"app_name": app_value},
                         "requires_permission": ["open_app"],
                         "confidence": "high",
                         "resolution": resolution.meta
                     })
 
-                elif resolution.type == "web_search":
-                    # Target not found locally → search the web for it
-                    self._log(f"App not found locally — routing to web search: '{normalized_target}'")
-                    analysis.update({
-                        "intent": "search_web",
-                        "actions": ["search_web"],
-                        "params": {"query": normalized_target},
-                        "requires_permission": ["open_browser"],
-                        "confidence": "high",
-                        "resolution": resolution.meta
-                    })
+                elif resolution.category == "web_search":
+                    if resolution.confidence == "high":
+                        # High-confidence web_search = known website (e.g. "youtube")
+                        # Pass the resolved URL via resolved_path so open_website can use it
+                        analysis.update({
+                            "intent": "open_website",
+                            "actions": ["open_website"],
+                            "params": {
+                                "site_name": normalized_target,
+                                "url": resolution.resolved_path,
+                            },
+                            "requires_permission": ["open_browser"],
+                            "confidence": "high",
+                            "resolution": resolution.meta
+                        })
+                    else:
+                        # Low-confidence web_search = app not found locally.
+                        # Explicit fallback — NOT silent. Execution layer will
+                        # show the user what happened before searching.
+                        self._log(f"App not found locally — explicit web_search fallback: '{normalized_target}'")
+                        analysis.update({
+                            "intent": "search_web",
+                            "actions": ["search_web"],
+                            "params": {"query": normalized_target},
+                            "requires_permission": ["open_browser"],
+                            "confidence": "high",
+                            "resolution": resolution.meta,
+                            "fallback_info": self._resolver.make_fallback_info(normalized_target)
+                        })
 
                 else:
                     # Unknown — structured failure, not a raw exception
-                    self._log(f"Resolution failed for '{normalized_target}'")
+                    self._log(f"Resolution returned unknown for '{normalized_target}'")
                     analysis.update({
                         "intent": "unknown",
                         "actions": [],
                         "params": {},
                         "requires_permission": [],
                         "confidence": "low",
-                        "resolution_failure": self._resolver.failure_result(
-                            normalized_target, stage="resolution"
-                        )
+                        "fallback_info": self._resolver.make_fallback_info(normalized_target)
                     })
                 # ── End Resolution Pipeline ──────────────────────────────────
 

@@ -201,130 +201,254 @@ Evo-AI uses a smart routing system that balances speed and capability:
 
 ---
 
-## 🔥 NEW: Resolution Layer (Input Intelligence)
+## NEW: Resolution Layer (Input Intelligence)
 
-> Added in v2.1.0 — introduces **flexibility without breaking determinism**.
+> Added in v2.1.0, refined in v2.1.1.
 
 ### Why This Layer Exists
 
-Before v2.1.0, the system relied on exact string matching to decide whether a target was an app or a website. This caused three classes of failures:
-
-| Problem | Example | Old Behaviour |
-|---------|---------|---------------|
-| Typos | `open spotfy` | Crashed / unknown intent |
-| Aliases | `launch browser` | Routed to `open_application("browser")` → failed |
-| Web-only apps | `open tinkercad` | Tried to find a local exe → failed |
-| Unknown apps | `open unknownapp` | Raw exception or silent failure |
-
-The Resolution Layer fixes all of these **without adding any LLM-based decision making**.
+Before v2.1.0, the system used exact string matching to decide whether a target
+was an app or a website. This caused failures on typos, aliases, and unknown
+inputs. The Resolution Layer fixes this without adding any LLM-based decision
+making.
 
 ---
 
-### Execution Flow: Old vs New
+### Execution Flow
 
-**OLD FLOW**
-```
-User Input → Reasoner → Planner → Executor → Verifier
-```
-
-**NEW FLOW**
 ```
 User Input
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│  INPUT NORMALIZER  (core/input/input_normalizer.py)     │
-│  • Lowercase + strip whitespace                         │
-│  • Typo correction  ("spotfy" → "spotify")              │
-│  • Alias expansion  ("browser" → "chrome")              │
-└────────────────────────┬────────────────────────────────┘
-                         │ normalized text
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│  TARGET RESOLVER   (core/resolution/target_resolver.py) │
-│  • Web-only check  ("tinkercad" → website)              │
-│  • Known websites  ("spotify"   → URL)                  │
-│  • Everything CLI  (es.exe search for .exe)             │
-│  • Known apps list ("vscode"    → code.exe)             │
-│  • Web search fallback (unknown → search_web)           │
-└────────────────────────┬────────────────────────────────┘
-                         │ ResolutionResult
-                         ▼
-                      Reasoner
-                         │
-                         ▼
-                      Planner
-                         │
-                         ▼
-              ┌──────────────────────┐
-              │  EXECUTION RESOLVER  │
-              │  type=application    │ → open_application
-              │  type=website        │ → open_website
-              │  type=web_search     │ → search_web
-              │  type=unknown        │ → structured failure
-              └──────────────────────┘
-                         │
-                         ▼
-                      Executor
-                         │
-                         ▼
-                      Verifier
-                         │
-                         ▼
-                  Debugger (future)
+    |
+    v
++----------------------------------------------------------+
+|  INPUT NORMALIZER  (core/input/input_normalizer.py)      |
+|  - Lowercase + strip whitespace                          |
+|  - Typo correction  ("spotfy" -> "spotify")              |
+|  - Alias expansion  ("browser" -> "chrome")              |
++-------------------------+--------------------------------+
+                          | normalized text
+                          v
++----------------------------------------------------------+
+|  TARGET RESOLVER   (core/resolution/target_resolver.py)  |
+|                                                          |
+|  Step 1: Known websites (<=10 entries, non-obvious URLs) |
+|  Step 2: Everything CLI search -- es.exe (PRIMARY)       |
+|  Step 3: Known-apps list (fallback, no Everything)       |
+|  Step 4: Web search fallback (explicit, not silent)      |
+|                                                          |
+|  Returns: ResolutionResult                               |
+|    category: "application" | "web_search" | "unknown"   |
+|    query: normalized input (unchanged)                   |
+|    confidence: "high" | "medium" | "low"                 |
+|    resolved_path: full path or URL if found              |
++-------------------------+--------------------------------+
+                          | ResolutionResult
+                          v
+              +-----------+------------+
+              |                        |
+    confidence low/fallback     confidence high/medium
+              |                        |
+              v                        v
+          Debugger                  Reasoner
+          (returns                     |
+        DebugReport,                   v
+        no execution)              Planner
+                                       |
+                                       v
+                                   Executor
+                                       |
+                                       v
+                                   Verifier
 ```
-
-**Key guarantee**: The Reasoner still makes all routing decisions. The Resolution Layer only transforms the *target string* — it never executes anything, never calls an LLM, and never bypasses the Planner/Executor gate.
 
 ---
 
-### Resolution Strategy
+### Resolution Principles
 
-The resolver follows a strict, ordered pipeline. Each step is deterministic:
+**Deterministic** -- Every decision follows a fixed rule. No AI, no probability,
+no guessing.
+
+**Search-first** -- Everything CLI (es.exe) is the primary app resolution method.
+It searches the actual filesystem, so it works for any installed app without
+needing a hardcoded entry.
+
+**Minimal hardcoding** -- The known-websites list is capped at 10 entries (sites
+with non-obvious URLs like gmail -> mail.google.com). The known-apps list is a
+fallback used only when Everything is unavailable.
+
+**No silent fallbacks** -- When an app is not found locally, the resolver returns
+category="web_search" with confidence="low". The reasoning layer attaches a
+fallback_info dict so the execution layer can inform the user before searching,
+rather than silently switching behavior.
+
+**No URL guessing** -- The resolver never constructs www.{name}.com. Unknown
+sites go through search_web.
+
+**Separation of resolution vs execution** -- The resolver only classifies the
+target and returns structured data. It never calls tools, builds URLs for unknown
+sites, or decides what to execute. Those decisions belong to the reasoning and
+execution layers.
+
+---
+
+### 4-Step Resolution Pipeline
 
 ```
-1. NORMALIZE INPUT
-   └─ Lowercase, strip, collapse whitespace
-   └─ Correct known typos (table-based, ~60 entries)
-   └─ Expand aliases ("browser" → "chrome", "code" → "vscode")
+1. KNOWN WEBSITES (<=10 entries)
+   - Non-obvious canonical URLs only (gmail, spotify, teams...)
+   - Returns: category=web_search, confidence=high, resolved_path=URL
 
-2. CHECK WEB-ONLY SET
-   └─ Some targets are always websites (tinkercad, figma, colab…)
-   └─ If match → type=website, return canonical URL immediately
+2. EVERYTHING CLI (es.exe) -- PRIMARY
+   - Searches actual filesystem for <target>.exe
+   - Filters: .exe files only
+   - Ranks: exact name (3) > prefix (2) > contains (1)
+   - Tiebreak: shorter path wins
+   - Returns: category=application, confidence=high, resolved_path=full_path
 
-3. CHECK KNOWN WEBSITES
-   └─ Curated map of 70+ sites → canonical URLs
-   └─ If match → type=website, return URL
+3. KNOWN-APPS LIST -- FALLBACK (Everything unavailable only)
+   - Curated map of ~45 common apps -> executable names
+   - Match order: exact -> prefix -> substring
+   - Returns: category=application, confidence=medium, resolved_path=exe_name
 
-4. SEARCH VIA EVERYTHING CLI (Windows, if available)
-   └─ Run: es.exe <target>.exe -n 20
-   └─ Filter: .exe files only
-   └─ Rank: exact name > prefix > substring (deterministic scoring)
-   └─ If match → type=application, return full path
-
-5. FUZZY MATCH ON KNOWN APPS LIST
-   └─ Curated map of 80+ apps → executable names
-   └─ Matching: exact > prefix > substring
-   └─ If match → type=application, return exe name
-
-6. WEB SEARCH FALLBACK
-   └─ Target not found locally
-   └─ Return type=web_search (caller routes to search_web tool)
-   └─ NEVER guess URLs like "www.{name}.com"
-
-7. STRUCTURED FAILURE (if all else fails)
-   └─ Return type=unknown with structured error dict:
-      { "status": "failure", "reason": "APPLICATION_NOT_FOUND",
-        "input": "<target>", "stage": "resolution" }
-   └─ No raw exceptions raised
+4. WEB SEARCH FALLBACK -- EXPLICIT
+   - No local match found
+   - Returns: category=web_search, confidence=low, resolved_path=None
+   - Caller receives fallback_info dict:
+     { "status": "fallback", "reason": "APPLICATION_NOT_FOUND",
+       "suggested_action": "web_search", "query": "<target>" }
+   - Execution layer decides -- user is informed, not surprised
 ```
 
-**What the resolver NEVER does:**
-- Guess URLs (`www.{name}.com` pattern is explicitly removed)
-- Call an LLM
-- Execute any system command (except the read-only `es.exe` search)
-- Auto-launch anything
-- Bypass user confirmation
+---
+
+### Debugger Layer
+
+The Debugger activates **after the Resolver** and **before the Planner/Executor**,
+only when resolution confidence is low or a fallback_info is present.
+
+```
+User Input
+    |
+    v
+Input Normalizer
+    |
+    v
+Target Resolver
+    |
+    +-- confidence == "high" or "medium" ---------> Reasoner --> Planner --> Executor
+    |
+    +-- confidence == "low"  OR fallback_info -----> Debugger
+                                                         |
+                                                         v
+                                                   DebugReport
+                                                   (returned to user)
+                                                   NO execution occurs
+```
+
+**DebugReport structure:**
+```python
+{
+    "status":       "debug",
+    "message":      "Application 'spotfy' was not found...",
+    "suggestions":  [
+        "Open application: spotify",
+        "Search web for: spotfy",
+    ],
+    "next_actions": [
+        {"action": "open_application", "params": {"app_name": "spotify"}, "label": "Open spotify"},
+        {"action": "search_web",       "params": {"query": "spotfy"},     "label": "Search the web for 'spotfy'"},
+    ]
+}
+```
+
+**Principles:**
+- Non-executing: the debugger never calls tools, never launches apps, never modifies state
+- Deterministic: suggestions come from fuzzy matching on known-apps and known-websites lists
+- No LLM: all logic is rule-based
+- User in control: next_actions are presented as choices, not auto-executed
+- Transparent: the message explains exactly what happened and why
+
+**Location:** `core/debugger/debugger.py`
+
+---
+
+### Resolution Examples
+
+| User Input     | After Normalizer | Category    | Confidence | Action Taken                     |
+|----------------|-----------------|-------------|------------|----------------------------------|
+| open spotfy    | open spotify    | web_search  | high       | Opens https://open.spotify.com   |
+| open youtube   | open youtube    | web_search  | high       | Opens https://www.youtube.com    |
+| open tinkercad | open tinkercad  | web_search  | low        | Searches Google for "tinkercad"  |
+| open vscode    | open vscode     | application | medium     | Launches code.exe                |
+| launch browser | launch chrome   | application | medium     | Launches chrome.exe              |
+| open unknownapp| open unknownapp | web_search  | low        | Searches Google for "unknownapp" |
+
+---
+
+### Input Intelligence Enhancements
+
+Added in v2.1.2 to address UX gaps found in stress testing.
+All rules are deterministic — no LLM, no randomness.
+
+#### 1. Verb Normalization
+
+Common verb typos are corrected before any other processing:
+
+```
+opne  → open      lauch  → launch
+opn   → open      launhc → launch
+oen   → open      satrt  → start
+```
+
+This runs on the **first word only**, before the target is extracted.
+Previously, `opne chrome` would bypass the entire resolution pipeline.
+Now it correctly resolves to `open chrome`.
+
+#### 2. Phrase-Level Aliases
+
+The alias table now supports multi-word phrases as keys:
+
+```
+"my browser"   → chrome      "my editor"    → vscode
+"web browser"  → chrome      "code editor"  → vscode
+"the browser"  → chrome      "music player" → spotify
+```
+
+These are matched against the full target string (after the verb),
+so `open my browser` correctly resolves to `open chrome`.
+
+#### 3. Semantic Intent Mapping (Rule-Based)
+
+A lightweight keyword → app mapping is applied **only when no direct
+match or alias was found** (i.e. the target is still unresolved after
+steps 1-2). This handles vague intent phrases:
+
+```
+music / songs / playlist  → spotify
+video / movie / media     → vlc
+coding / programming      → vscode
+chat / messaging          → discord
+browsing / web            → chrome
+notes / writing           → notepad
+3d / modeling             → blender
+streaming / recording     → obs
+gaming / games            → steam
+```
+
+Applied via `InputNormalizer.resolve_semantic()`. No LLM. No guessing.
+`open something for music` → `open spotify`.
+
+#### 4. Debugger Suggestion Filtering
+
+The debugger's fuzzy matcher now enforces a **minimum score threshold
+of 2** (prefix match or better). Score-1 matches (character overlap,
+substring) are excluded from suggestions.
+
+Before: `open asdfghjkl` → suggested `slack`, `signal`, `taskmgr` (meaningless)
+After:  `open asdfghjkl` → only `Search web for: asdfghjkl` (honest)
+
+Meaningful typos still get relevant suggestions:
+`open discrod` → suggests `discord` (prefix match, score 2+).
 
 ---
 
@@ -334,27 +458,15 @@ The resolver follows a strict, ordered pipeline. Each step is deterministic:
 |------|---------|
 | `core/input/input_normalizer.py` | Typo correction + alias expansion |
 | `core/input/__init__.py` | Module exports |
-| `core/resolution/target_resolver.py` | Core resolution pipeline |
+| `core/resolution/target_resolver.py` | 4-step resolution pipeline |
 | `core/resolution/__init__.py` | Module exports |
 
 ### Modified Files (minimal changes)
 
 | File | Change |
 |------|--------|
-| `core/reasoning.py` | Added normalizer + resolver imports; replaced hardcoded website list in `_quick_pattern_match` with resolver call; added input normalization at top of `analyze_request` |
-| `core/tools.py` | `open_website` now uses resolver instead of hardcoded dict + URL guessing; `open_application` now uses resolver for path lookup and web-search fallback |
-
----
-
-### Resolution Examples
-
-| User Input | After Normalizer | Resolver Type | Action Taken |
-|------------|-----------------|---------------|--------------|
-| `open spotfy` | `open spotify` | `website` | Opens `https://open.spotify.com` |
-| `open tinkercad` | `open tinkercad` | `website` | Opens `https://www.tinkercad.com` |
-| `open vscode` | `open vscode` | `application` | Launches `code.exe` |
-| `launch browser` | `launch chrome` | `application` | Launches `chrome.exe` |
-| `open unknownapp` | `open unknownapp` | `web_search` | Searches Google for "unknownapp" |
+| `core/reasoning.py` | Normalizer + resolver imports; OPEN block uses `category`/`confidence` to route; low-confidence fallback attaches `fallback_info` instead of silently searching |
+| `core/tools.py` | `open_website` accepts pre-resolved URL; `open_application` uses `resolved_path`; no silent web-search fallback |
 
 ---
 

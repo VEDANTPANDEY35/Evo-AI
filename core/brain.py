@@ -15,6 +15,7 @@ from .action_parser import ActionParser
 from .planner import DeterministicPlanner
 from .environment import EnvironmentManager
 from .verifier import ExecutionVerifier
+from .debugger import Debugger, DebugReport
 
 
 @dataclass
@@ -30,6 +31,7 @@ class StructuredPlan:
     is_compound: bool = False
     is_conversational: bool = False
     original_text: str = ""
+    debug_report: Optional[Any] = None  # DebugReport if debugger activated
 
 
 @dataclass
@@ -69,6 +71,7 @@ class Brain:
         self.planner = DeterministicPlanner(reasoner, debug=debug)
         self.environment = EnvironmentManager()
         self.verifier = ExecutionVerifier(debug=debug)
+        self.debugger = Debugger(debug=debug)
         self.debug = debug
         self.local_available = self.llm.check_local_available()
         
@@ -180,6 +183,52 @@ class Brain:
         )
         
         self._log(f"Intent: {analysis['intent']} (confidence: {analysis.get('confidence', 'unknown')})")
+        
+        # ── Debugger gate ────────────────────────────────────────────────────
+        # Activate ONLY when resolution confidence is low OR fallback_info is
+        # present (app not found locally). The debugger is non-executing — it
+        # returns a DebugReport that the interface layer surfaces to the user.
+        # Execution does NOT proceed when the debugger activates.
+        fallback_info = analysis.get("fallback_info")
+        resolution_meta = analysis.get("resolution", {})
+        resolution_confidence = resolution_meta.get("source", "")  # used for logging only
+
+        # Determine the confidence the resolver assigned to this target
+        # (stored in analysis["resolution"]["confidence"] when present,
+        #  otherwise infer from the analysis confidence string)
+        _res_conf = "high"
+        if fallback_info:
+            _res_conf = "low"
+        elif analysis.get("confidence") == "low":
+            _res_conf = "low"
+
+        if self.debugger.should_activate(_res_conf, fallback_info):
+            self._log(f"Debugger activated for: '{text}'")
+            # Build a minimal ResolutionResult-like object from analysis data
+            from .resolution.target_resolver import ResolutionResult
+            _mock_resolution = ResolutionResult(
+                category=analysis.get("intent", "unknown"),
+                query=analysis.get("params", {}).get("query", text),
+                confidence=_res_conf,
+                resolved_path=None,
+                meta=resolution_meta,
+            )
+            debug_report = self.debugger.analyze(
+                resolution=_mock_resolution,
+                original_input=text,
+                fallback_info=fallback_info,
+            )
+            return StructuredPlan(
+                steps=[],
+                risk_level="low",
+                permissions_required=[],
+                confidence=0.0,
+                is_compound=False,
+                is_conversational=False,
+                original_text=text,
+                debug_report=debug_report,
+            )
+        # ── End debugger gate ────────────────────────────────────────────────
         
         # Fast-path: Simple responses (greetings, thanks)
         if analysis["intent"] in ["greeting", "thanks"]:
@@ -311,6 +360,21 @@ class Brain:
         
         # Handle empty plans
         if not plan.steps:
+            # If a debug report is attached, surface it instead of a generic message
+            if plan.debug_report is not None:
+                dr = plan.debug_report
+                lines = [dr.message, ""]
+                if dr.suggestions:
+                    lines.append("Suggestions:")
+                    for i, s in enumerate(dr.suggestions, 1):
+                        lines.append(f"  {i}. {s}")
+                return ExecutionResult(
+                    success=False,
+                    completed_steps=0,
+                    total_steps=0,
+                    message="\n".join(lines).strip(),
+                    error_reason="LOW_CONFIDENCE_RESOLUTION",
+                )
             return ExecutionResult(
                 success=False,
                 completed_steps=0,
