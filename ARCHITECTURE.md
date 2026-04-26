@@ -2,7 +2,7 @@
 
 > **Offline-first AI Desktop Assistant with System Control**
 
-**Version:** 2.0.0  
+**Version:** 2.1.0  
 **Status:** Production Ready  
 **Platform:** Windows, macOS, Linux
 
@@ -13,11 +13,12 @@
 1. [Overview](#overview)
 2. [Quick Start](#quick-start)
 3. [System Architecture](#system-architecture)
-4. [Core Components](#core-components)
-5. [Features](#features)
-6. [Usage Guide](#usage-guide)
-7. [Development](#development)
-8. [Testing](#testing)
+4. [🔥 NEW: Resolution Layer (Input Intelligence)](#-new-resolution-layer-input-intelligence)
+5. [Core Components](#core-components)
+6. [Features](#features)
+7. [Usage Guide](#usage-guide)
+8. [Development](#development)
+9. [Testing](#testing)
 
 ---
 
@@ -195,6 +196,165 @@ Evo-AI uses a smart routing system that balances speed and capability:
 - Complex queries that need understanding
 - Action: LLM analyzes and suggests actions
 - Speed: 2-10 seconds
+
+---
+
+---
+
+## 🔥 NEW: Resolution Layer (Input Intelligence)
+
+> Added in v2.1.0 — introduces **flexibility without breaking determinism**.
+
+### Why This Layer Exists
+
+Before v2.1.0, the system relied on exact string matching to decide whether a target was an app or a website. This caused three classes of failures:
+
+| Problem | Example | Old Behaviour |
+|---------|---------|---------------|
+| Typos | `open spotfy` | Crashed / unknown intent |
+| Aliases | `launch browser` | Routed to `open_application("browser")` → failed |
+| Web-only apps | `open tinkercad` | Tried to find a local exe → failed |
+| Unknown apps | `open unknownapp` | Raw exception or silent failure |
+
+The Resolution Layer fixes all of these **without adding any LLM-based decision making**.
+
+---
+
+### Execution Flow: Old vs New
+
+**OLD FLOW**
+```
+User Input → Reasoner → Planner → Executor → Verifier
+```
+
+**NEW FLOW**
+```
+User Input
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  INPUT NORMALIZER  (core/input/input_normalizer.py)     │
+│  • Lowercase + strip whitespace                         │
+│  • Typo correction  ("spotfy" → "spotify")              │
+│  • Alias expansion  ("browser" → "chrome")              │
+└────────────────────────┬────────────────────────────────┘
+                         │ normalized text
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│  TARGET RESOLVER   (core/resolution/target_resolver.py) │
+│  • Web-only check  ("tinkercad" → website)              │
+│  • Known websites  ("spotify"   → URL)                  │
+│  • Everything CLI  (es.exe search for .exe)             │
+│  • Known apps list ("vscode"    → code.exe)             │
+│  • Web search fallback (unknown → search_web)           │
+└────────────────────────┬────────────────────────────────┘
+                         │ ResolutionResult
+                         ▼
+                      Reasoner
+                         │
+                         ▼
+                      Planner
+                         │
+                         ▼
+              ┌──────────────────────┐
+              │  EXECUTION RESOLVER  │
+              │  type=application    │ → open_application
+              │  type=website        │ → open_website
+              │  type=web_search     │ → search_web
+              │  type=unknown        │ → structured failure
+              └──────────────────────┘
+                         │
+                         ▼
+                      Executor
+                         │
+                         ▼
+                      Verifier
+                         │
+                         ▼
+                  Debugger (future)
+```
+
+**Key guarantee**: The Reasoner still makes all routing decisions. The Resolution Layer only transforms the *target string* — it never executes anything, never calls an LLM, and never bypasses the Planner/Executor gate.
+
+---
+
+### Resolution Strategy
+
+The resolver follows a strict, ordered pipeline. Each step is deterministic:
+
+```
+1. NORMALIZE INPUT
+   └─ Lowercase, strip, collapse whitespace
+   └─ Correct known typos (table-based, ~60 entries)
+   └─ Expand aliases ("browser" → "chrome", "code" → "vscode")
+
+2. CHECK WEB-ONLY SET
+   └─ Some targets are always websites (tinkercad, figma, colab…)
+   └─ If match → type=website, return canonical URL immediately
+
+3. CHECK KNOWN WEBSITES
+   └─ Curated map of 70+ sites → canonical URLs
+   └─ If match → type=website, return URL
+
+4. SEARCH VIA EVERYTHING CLI (Windows, if available)
+   └─ Run: es.exe <target>.exe -n 20
+   └─ Filter: .exe files only
+   └─ Rank: exact name > prefix > substring (deterministic scoring)
+   └─ If match → type=application, return full path
+
+5. FUZZY MATCH ON KNOWN APPS LIST
+   └─ Curated map of 80+ apps → executable names
+   └─ Matching: exact > prefix > substring
+   └─ If match → type=application, return exe name
+
+6. WEB SEARCH FALLBACK
+   └─ Target not found locally
+   └─ Return type=web_search (caller routes to search_web tool)
+   └─ NEVER guess URLs like "www.{name}.com"
+
+7. STRUCTURED FAILURE (if all else fails)
+   └─ Return type=unknown with structured error dict:
+      { "status": "failure", "reason": "APPLICATION_NOT_FOUND",
+        "input": "<target>", "stage": "resolution" }
+   └─ No raw exceptions raised
+```
+
+**What the resolver NEVER does:**
+- Guess URLs (`www.{name}.com` pattern is explicitly removed)
+- Call an LLM
+- Execute any system command (except the read-only `es.exe` search)
+- Auto-launch anything
+- Bypass user confirmation
+
+---
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `core/input/input_normalizer.py` | Typo correction + alias expansion |
+| `core/input/__init__.py` | Module exports |
+| `core/resolution/target_resolver.py` | Core resolution pipeline |
+| `core/resolution/__init__.py` | Module exports |
+
+### Modified Files (minimal changes)
+
+| File | Change |
+|------|--------|
+| `core/reasoning.py` | Added normalizer + resolver imports; replaced hardcoded website list in `_quick_pattern_match` with resolver call; added input normalization at top of `analyze_request` |
+| `core/tools.py` | `open_website` now uses resolver instead of hardcoded dict + URL guessing; `open_application` now uses resolver for path lookup and web-search fallback |
+
+---
+
+### Resolution Examples
+
+| User Input | After Normalizer | Resolver Type | Action Taken |
+|------------|-----------------|---------------|--------------|
+| `open spotfy` | `open spotify` | `website` | Opens `https://open.spotify.com` |
+| `open tinkercad` | `open tinkercad` | `website` | Opens `https://www.tinkercad.com` |
+| `open vscode` | `open vscode` | `application` | Launches `code.exe` |
+| `launch browser` | `launch chrome` | `application` | Launches `chrome.exe` |
+| `open unknownapp` | `open unknownapp` | `web_search` | Searches Google for "unknownapp" |
 
 ---
 
@@ -610,7 +770,7 @@ Evo-AI_mogwai_local/
 │   └── Evo-AI_cli.py              # Terminal interface
 ├── core/
 │   ├── brain.py                 # Pure logic orchestrator
-│   ├── reasoning.py             # Intent detection
+│   ├── reasoning.py             # Intent detection (+ resolution pipeline)
 │   ├── planner.py               # Compound instruction handler
 │   ├── executor.py              # Action execution
 │   ├── verifier.py              # Execution verification
@@ -623,7 +783,13 @@ Evo-AI_mogwai_local/
 │   ├── safety_validator.py      # Path/command safety
 │   ├── permission_manager.py    # Permission management
 │   ├── browser_automation.py    # Browser control
-│   └── system_prompt.py         # LLM system prompt
+│   ├── system_prompt.py         # LLM system prompt
+│   ├── input/                   # 🔥 NEW: Input normalization
+│   │   ├── __init__.py
+│   │   └── input_normalizer.py  # Typo correction + alias expansion
+│   └── resolution/              # 🔥 NEW: Target resolution pipeline
+│       ├── __init__.py
+│       └── target_resolver.py   # Website / app / web-search routing
 ├── interfaces/
 │   └── voice/                   # Voice assistant (Windows)
 ├── config/

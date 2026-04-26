@@ -421,34 +421,44 @@ class SystemTools:
         return "\n".join(output)
     
     def open_application(self, app_name: str) -> str:
-        """Open an application."""
+        """Open an application.
+
+        Uses the TargetResolver to find the best executable path.
+        Falls back to web search if the app cannot be found locally.
+        """
         try:
             self._log(f"Opening application: {app_name}")
-            
-            # Special handling for browsers - use full path
-            if app_name.lower() in ["brave", "chrome", "firefox", "edge"]:
+
+            # ── Resolution Pipeline ──────────────────────────────────────────
+            from .resolution.target_resolver import TargetResolver
+            resolver = TargetResolver(debug=self.debug)
+            resolution = resolver.resolve(app_name.lower().strip())
+
+            if resolution.type == "website":
+                # Resolver determined this is a web target (e.g. tinkercad)
+                return self.open_website(app_name)
+
+            elif resolution.type == "web_search":
+                # App not found locally — search the web for it
+                self._log(f"App '{app_name}' not found — routing to web search")
+                return self.search_web(app_name)
+
+            # resolution.type == "application" — use resolved value
+            resolved_name = resolution.value if resolution.type == "application" else app_name
+            # ── End Resolution Pipeline ──────────────────────────────────────
+
+            # Special handling for browsers — use full path via BrowserAutomation
+            if resolved_name.lower().replace(".exe", "") in ["brave", "chrome", "firefox", "edge"]:
                 from .browser_automation import BrowserAutomation
                 browser_auto = BrowserAutomation(debug=self.debug)
-                
-                # Map app names to browser paths
-                browser_paths = {
-                    "brave": browser_auto.BROWSER_PATHS.get(self.platform, []),
-                    "chrome": browser_auto.BROWSER_PATHS.get(self.platform, []),
-                }
-                
-                # Find the browser
+                browser_key = resolved_name.lower().replace(".exe", "")
+
                 browser_path = None
-                if app_name.lower() == "brave":
-                    for path in browser_auto.BROWSER_PATHS.get(self.platform, []):
-                        if "brave" in path.lower() and os.path.exists(path):
-                            browser_path = path
-                            break
-                elif app_name.lower() == "chrome":
-                    for path in browser_auto.BROWSER_PATHS.get(self.platform, []):
-                        if "chrome" in path.lower() and os.path.exists(path):
-                            browser_path = path
-                            break
-                
+                for path in browser_auto.BROWSER_PATHS.get(self.platform, []):
+                    if browser_key in path.lower() and os.path.exists(path):
+                        browser_path = path
+                        break
+
                 if browser_path:
                     if self.platform == "Windows":
                         subprocess.Popen([browser_path])
@@ -459,11 +469,16 @@ class SystemTools:
                     return f"✓ Opened {app_name.title()}"
                 else:
                     return f"✗ {app_name.title()} not found on your system"
-            
-            # Regular applications - use adapter
-            success = self.adapter.open_application(app_name)
+
+            # If Everything gave us a full path, use it directly
+            if os.path.isabs(resolved_name) and os.path.isfile(resolved_name):
+                subprocess.Popen([resolved_name])
+                return f"✓ Opened {app_name}"
+
+            # Regular applications — use OS adapter
+            success = self.adapter.open_application(resolved_name)
             return f"✓ Opened {app_name}" if success else f"✗ Error opening {app_name}"
-            
+
         except Exception as e:
             self._log(f"Error opening application: {e}")
             return f"✗ Error opening {app_name}: {e}"
@@ -718,63 +733,40 @@ class SystemTools:
             return f"✗ Error searching web: {e}"
     
     def open_website(self, site_name: str) -> str:
-        """Open a specific website directly in the browser."""
+        """Open a specific website directly in the browser.
+
+        Uses the TargetResolver to look up the canonical URL.
+        Never guesses URLs — if the site is unknown, falls back to a web search.
+        """
         try:
-            # Map common site names to their URLs
-            website_urls = {
-                "youtube": "https://www.youtube.com",
-                "google": "https://www.google.com",
-                "facebook": "https://www.facebook.com",
-                "twitter": "https://www.twitter.com",
-                "instagram": "https://www.instagram.com",
-                "linkedin": "https://www.linkedin.com",
-                "github": "https://www.github.com",
-                "stackoverflow": "https://stackoverflow.com",
-                "reddit": "https://www.reddit.com",
-                "wikipedia": "https://www.wikipedia.org",
-                "amazon": "https://www.amazon.com",
-                "netflix": "https://www.netflix.com",
-                "gmail": "https://mail.google.com",
-                "outlook": "https://outlook.live.com",
-                "yahoo": "https://www.yahoo.com",
-                "bing": "https://www.bing.com",
-                "twitch": "https://www.twitch.tv",
-                "discord": "https://discord.com",
-                "slack": "https://slack.com",
-                "zoom": "https://zoom.us",
-                "teams": "https://teams.microsoft.com",
-                "whatsapp": "https://web.whatsapp.com",
-                "telegram": "https://web.telegram.org",
-                "spotify": "https://open.spotify.com",
-                "soundcloud": "https://soundcloud.com"
-            }
-            
-            site_name_lower = site_name.lower()
-            
-            if site_name_lower in website_urls:
-                url = website_urls[site_name_lower]
-                
-                from .browser_automation import BrowserAutomation
-                browser = BrowserAutomation(debug=self.debug)
-                
+            from .resolution.target_resolver import TargetResolver
+            from .browser_automation import BrowserAutomation
+
+            resolver = TargetResolver(debug=self.debug)
+            resolution = resolver.resolve(site_name.lower().strip())
+
+            browser = BrowserAutomation(debug=self.debug)
+
+            if resolution.type == "website":
+                url = resolution.value
                 success, message = browser.open_url(url)
                 if success:
                     return f"✓ Opened {site_name} ({url})"
                 else:
                     return f"✗ Error opening {site_name}: {message}"
+
+            elif resolution.type == "web_search":
+                # Site not in known list — search for it instead of guessing URL
+                self._log(f"Unknown site '{site_name}' — falling back to web search")
+                success, message = browser.search(site_name, "google")
+                if success:
+                    return f"✓ Searching for '{site_name}' (site not in known list)"
+                else:
+                    return f"✗ Error searching for {site_name}: {message}"
+
             else:
-                # If not in our predefined list, try to construct a URL
-                url = f"https://www.{site_name_lower}.com"
-                
-                from .browser_automation import BrowserAutomation
-                browser = BrowserAutomation(debug=self.debug)
-                
-                success, message = browser.open_url(url)
-                if success:
-                    return f"✓ Opened {site_name} ({url})"
-                else:
-                    return f"✗ Error opening {site_name}: {message}"
-                    
+                return f"✗ Could not resolve website: {site_name}"
+
         except Exception as e:
             self._log(f"Error opening website: {e}")
             return f"✗ Error opening website: {e}"

@@ -2,12 +2,16 @@
 Planning and self-critique reasoning layer with hybrid intelligence.
 """
 from typing import Dict, Any, Optional, List
+from .input.input_normalizer import InputNormalizer
+from .resolution.target_resolver import TargetResolver
 
 
 class Reasoner:
     def __init__(self, debug: bool = False):
         self.debug = debug
         self.tool_registry = self._build_tool_registry()
+        self._normalizer = InputNormalizer()
+        self._resolver = TargetResolver(debug=debug)
     
     def _log(self, message: str):
         if self.debug:
@@ -111,7 +115,14 @@ class Reasoner:
     
     def analyze_request(self, user_input: str, use_llm: bool = False, llm_client=None) -> Dict[str, Any]:
         """Analyze user request using strict routing hierarchy."""
-        user_lower = user_input.lower()
+        # ── Input Normalization (pre-processing) ────────────────────────────
+        # Normalize the full input string before any routing decisions.
+        # This handles typos ("spotfy" → "spotify") and aliases ("browser" → "chrome")
+        # in the target portion of open/launch/start commands.
+        normalized_input, was_normalized = self._normalizer.normalize(user_input)
+        if was_normalized:
+            self._log(f"Input normalized: '{user_input}' → '{normalized_input}'")
+        user_lower = normalized_input.lower()
         
         # ========== STRICT ROUTING HIERARCHY ==========
         # Priority 1: Explicit system commands (handled by CLI, but check here for completeness)
@@ -202,7 +213,7 @@ class Reasoner:
             }
         
         # PRIORITY 4 & 5: Quick pattern matching (apps, websites, files, greetings)
-        quick_analysis = self._quick_pattern_match(user_lower, user_input)
+        quick_analysis = self._quick_pattern_match(user_lower, normalized_input)
         if quick_analysis["confidence"] == "high":
             self._log(f"Priority 4/5: Quick match - {quick_analysis['intent']}")
             return quick_analysis
@@ -221,7 +232,7 @@ class Reasoner:
             }
         
         # Enhanced pattern matching for edge cases
-        return self._enhanced_pattern_match(user_lower, user_input)
+        return self._enhanced_pattern_match(user_lower, normalized_input)
     
     def _is_conversational(self, user_lower: str) -> bool:
         """Check if this is a pure conversational query."""
@@ -336,20 +347,20 @@ class Reasoner:
         # SEARCH COLLISION REMOVED - Handle contextually in enhanced matching
         
         # OPEN commands - applications/websites
+        # Uses the Resolution Pipeline: InputNormalizer → TargetResolver
         if user_lower.startswith(("open ", "launch ", "start ")):
             for trigger in ["open ", "launch ", "start "]:
                 if user_lower.startswith(trigger):
-                    target = user_lower[len(trigger):].strip()
+                    raw_target = user_lower[len(trigger):].strip()
                     break
-            
-            # Check if it contains "and search" or "then search"
+
+            # Check if it contains "and search" or "then search" (compound handled by planner)
             if "and search" in user_lower or "then search" in user_lower:
-                # Extract search query
                 if "and search" in user_lower:
                     query = user_lower.split("and search", 1)[1].strip()
                 elif "then search" in user_lower:
                     query = user_lower.split("then search", 1)[1].strip()
-                
+
                 analysis.update({
                     "intent": "search_web",
                     "actions": ["search_web"],
@@ -358,30 +369,63 @@ class Reasoner:
                     "confidence": "high"
                 })
             else:
-                # Check if target is a common website/service
-                common_websites = [
-                    "youtube", "google", "facebook", "twitter", "instagram", "linkedin",
-                    "github", "stackoverflow", "reddit", "wikipedia", "amazon", "netflix",
-                    "gmail", "outlook", "yahoo", "bing", "twitch", "discord", "slack",
-                    "zoom", "teams", "whatsapp", "telegram", "spotify", "soundcloud"
-                ]
-                
-                if target.lower() in common_websites:
+                # ── Resolution Pipeline ──────────────────────────────────────
+                # Step 1: Normalize (typo correction + alias expansion)
+                normalized_target, was_changed = self._normalizer.normalize_target(raw_target)
+                if was_changed:
+                    self._log(f"Normalized '{raw_target}' → '{normalized_target}'")
+
+                # Step 2: Resolve (website / application / web_search / unknown)
+                resolution = self._resolver.resolve(normalized_target)
+                self._log(f"Resolution: type={resolution.type} value={resolution.value}")
+
+                if resolution.type == "website":
                     analysis.update({
                         "intent": "open_website",
                         "actions": ["open_website"],
-                        "params": {"site_name": target},
+                        "params": {"site_name": normalized_target},
                         "requires_permission": ["open_browser"],
-                        "confidence": "high"
+                        "confidence": "high",
+                        "resolution": resolution.meta
                     })
-                else:
+
+                elif resolution.type == "application":
                     analysis.update({
                         "intent": "open_app",
                         "actions": ["open_application"],
-                        "params": {"app_name": target},
+                        "params": {"app_name": resolution.value},
                         "requires_permission": ["open_app"],
-                        "confidence": "high"
+                        "confidence": "high",
+                        "resolution": resolution.meta
                     })
+
+                elif resolution.type == "web_search":
+                    # Target not found locally → search the web for it
+                    self._log(f"App not found locally — routing to web search: '{normalized_target}'")
+                    analysis.update({
+                        "intent": "search_web",
+                        "actions": ["search_web"],
+                        "params": {"query": normalized_target},
+                        "requires_permission": ["open_browser"],
+                        "confidence": "high",
+                        "resolution": resolution.meta
+                    })
+
+                else:
+                    # Unknown — structured failure, not a raw exception
+                    self._log(f"Resolution failed for '{normalized_target}'")
+                    analysis.update({
+                        "intent": "unknown",
+                        "actions": [],
+                        "params": {},
+                        "requires_permission": [],
+                        "confidence": "low",
+                        "resolution_failure": self._resolver.failure_result(
+                            normalized_target, stage="resolution"
+                        )
+                    })
+                # ── End Resolution Pipeline ──────────────────────────────────
+
             return analysis
         
         # Screenshot

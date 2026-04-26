@@ -171,3 +171,7 @@
 {"timestamp": "2026-03-11T04:20:26.075523", "action": "get_system_info", "permission": "read_system_info", "response": "allow_always", "reason": "Pre-granted", "context": {}}
 {"timestamp": "2026-03-13T09:42:34.193158", "action": "get_self_info", "permission": "read_system_info", "response": "allow_always", "reason": "Pre-granted", "context": {}}
 {"timestamp": "2026-03-13T09:43:17.502136", "action": "get_system_info", "permission": "read_system_info", "response": "allow_always", "reason": "Pre-granted", "context": {}}
+{"timestamp": "2026-04-07T14:24:40.369333", "action": "open_website", "permission": "open_browser", "response": "allow_always", "reason": "Pre-granted", "context": {"site_name": "youtube"}}
+{"timestamp": "2026-04-07T14:25:29.807164", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "powerpoint"}}
+{"timestamp": "2026-04-07T14:25:47.700684", "action": "open_website", "permission": "open_browser", "response": "allow_always", "reason": "Pre-granted", "context": {"site_name": "gmail"}}
+{"timestamp": "2026-04-07T14:26:23.388983", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "photoshop"}}
