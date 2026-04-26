@@ -1,6 +1,7 @@
 """
 Evo-AI CLI - Main entry point with rich terminal UI
 """
+
 import sys
 import os
 import argparse
@@ -226,6 +227,7 @@ class EvoAI:
 
 
 def main():
+    print("Evo-AI Version 9 🚀", flush=true)
     parser = argparse.ArgumentParser(description="Evo-AI - Your local AI companion")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
@@ -236,3 +238,31 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def run_ai(user_input: str):
+    """
+    API-safe wrapper for EvoAI.
+    No interactive input, no confirmation, always returns response.
+    """
+    try:
+        if not user_input:
+            return "No input provided"
+
+        evo_ai = EvoAI(debug=False)
+
+        # Generate plan
+        plan = evo_ai.brain.generate_plan(user_input)
+
+        # 🚨 IMPORTANT: Skip confirmation (API cannot handle input())
+        # Direct execution
+        result = evo_ai.brain.execute_plan(plan)
+
+        # Return safe response
+        if hasattr(result, "success") and result.success:
+    base_response = result.message if hasattr(result, "message") else str(result)
+    return f"🔥 Version 9 CLI Response:\n{base_response}"
+else:
+    return result.message if hasattr(result, "message") else "Execution failed"
+
+    except Exception as e:
+        return f"Error: {str(e)}"

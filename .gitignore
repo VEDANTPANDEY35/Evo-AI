@@ -35,3 +35,5 @@ Thumbs.db
 # Config (keep templates)
 config/settings.json
 config/system_paths.json
+
+*.tar
