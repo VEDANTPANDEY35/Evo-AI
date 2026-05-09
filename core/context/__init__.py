@@ -6,11 +6,13 @@ from .system_context import SystemContext
 from .workspace_context import WorkspaceContext
 from .project_analyzer import ProjectAnalyzer
 from .visual_context import VisualContext
+from .execution_context import ExecutionContext
 
 __all__ = [
     'ContextEngine',
     'SystemContext',
     'WorkspaceContext',
     'ProjectAnalyzer',
-    'VisualContext'
+    'VisualContext',
+    'ExecutionContext',
 ]

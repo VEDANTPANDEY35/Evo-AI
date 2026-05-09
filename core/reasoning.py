@@ -4,6 +4,28 @@ Planning and self-critique reasoning layer with hybrid intelligence.
 from typing import Dict, Any, Optional, List
 from .input.input_normalizer import InputNormalizer
 from .resolution.target_resolver import TargetResolver
+from .extraction.parameter_extractor import ParameterExtractor
+
+
+def handle_general_query() -> str:
+    """
+    Conversational Fallback Layer.
+
+    Returns a safe, deterministic response for non-action queries.
+    Does NOT use LLM, does NOT trigger the resolver, planner, or executor.
+    Called whenever no actionable intent is detected or the input is
+    conversational (e.g. 'tell me about yourself', 'what can you do').
+    """
+    return (
+        "I am Evo-AI. I can help you with tasks like:\n"
+        "  - Opening applications\n"
+        "  - Searching the web\n"
+        "  - Executing system commands safely\n\n"
+        "Try commands like:\n"
+        "  open chrome\n"
+        "  open something for coding\n"
+        "  open youtube"
+    )
 
 
 class Reasoner:
@@ -12,6 +34,7 @@ class Reasoner:
         self.tool_registry = self._build_tool_registry()
         self._normalizer = InputNormalizer()
         self._resolver = TargetResolver(debug=debug)
+        self._extractor = ParameterExtractor(debug=debug)
     
     def _log(self, message: str):
         if self.debug:
@@ -115,6 +138,16 @@ class Reasoner:
     
     def analyze_request(self, user_input: str, use_llm: bool = False, llm_client=None) -> Dict[str, Any]:
         """Analyze user request using strict routing hierarchy."""
+        result = self._analyze_request_inner(user_input, use_llm, llm_client)
+        # ── Parameter Enrichment ─────────────────────────────────────────────
+        # Runs AFTER intent resolution, BEFORE the result is returned to the
+        # planner.  Fills in missing structured params (pattern, directory,
+        # query…) without overwriting values already set by the resolver.
+        result = self._enrich_params(result, user_input)
+        return result
+
+    def _analyze_request_inner(self, user_input: str, use_llm: bool = False, llm_client=None) -> Dict[str, Any]:
+        """Internal routing logic — do not call directly."""
         # ── Input Normalization (pre-processing) ────────────────────────────
         # Normalize the full input string before any routing decisions.
         # This handles typos ("spotfy" → "spotify") and aliases ("browser" → "chrome")
@@ -218,21 +251,48 @@ class Reasoner:
             self._log(f"Priority 4/5: Quick match - {quick_analysis['intent']}")
             return quick_analysis
         
-        # PRIORITY 6: Conversational LLM fallback (only if nothing else matched)
+        # PRIORITY 6: Conversational fallback — deterministic, no LLM
+        # Handles: "tell me about yourself", "what can you do", "who are you",
+        # "help", greetings, random text, and any other non-actionable input.
         if self._is_conversational(user_lower) and not self._is_system_related(user_lower):
-            self._log("Priority 6: Conversational query - routing to LLM")
+            self._log("Priority 6: Conversational query — returning deterministic fallback")
             return {
-                "intent": "conversation",
+                "intent": "general_query",
                 "requires_internet": False,
                 "requires_permission": [],
                 "actions": [],
-                "params": {},
+                "params": {"response": handle_general_query()},
                 "confidence": "high",
-                "use_llm": True
+                "use_llm": False
             }
         
         # Enhanced pattern matching for edge cases
         return self._enhanced_pattern_match(user_lower, normalized_input)
+    
+    def _enrich_params(self, analysis: Dict[str, Any], original_input: str) -> Dict[str, Any]:
+        """
+        Post-resolution parameter enrichment via ParameterExtractor.
+
+        Called after the routing hierarchy produces an analysis dict.
+        Fills in missing structured params (pattern, directory, query, etc.)
+        without overwriting values already set by the resolver.
+
+        Only runs for actionable intents — skips conversational / general_query.
+        """
+        actions = analysis.get("actions", [])
+        if not actions:
+            return analysis
+
+        tool = actions[0]
+        existing_params = analysis.get("params", {})
+
+        enriched = self._extractor.extract(tool, existing_params, original_input)
+        if enriched != existing_params:
+            self._log(f"Params enriched for '{tool}': {existing_params} → {enriched}")
+            analysis = dict(analysis)
+            analysis["params"] = enriched
+
+        return analysis
     
     def _is_conversational(self, user_lower: str) -> bool:
         """Check if this is a pure conversational query."""
@@ -317,15 +377,17 @@ class Reasoner:
             })
             return analysis
         
-        # Self info (questions about Evo-AI itself)
+        # Self info (questions about Evo-AI's resource usage)
+        # Only triggers when the query is specifically about resource/memory usage,
+        # NOT for general "tell me about yourself" conversational questions.
         self_patterns = [
             "how much", "resource", "your resource", "you use", "you take", "you need",
-            "about yourself", "about you", "your usage", "your memory"
+            "your usage", "your memory"
         ]
         if any(pattern in user_lower for pattern in self_patterns):
             # Check if asking about Evo-AI specifically
-            evo_ai_indicators = ["you", "yourself", "Evo-AI", "this", "assistant", "ai"]
-            if any(indicator in user_lower for indicator in Evo-AI_indicators):
+            evo_ai_indicators = ["you", "yourself", "evo-ai", "this", "assistant", "ai"]
+            if any(indicator in user_lower for indicator in evo_ai_indicators):
                 analysis.update({
                     "intent": "self_info",
                     "actions": ["get_self_info"],
@@ -451,7 +513,7 @@ class Reasoner:
     def _enhanced_pattern_match(self, user_lower: str, original_input: str) -> Dict[str, Any]:
         """Enhanced pattern matching with scoring and contextual search routing."""
         
-        # Check for conversational patterns first
+        # Check for conversational patterns first — return deterministic fallback
         conversational_patterns = [
             "tell me", "explain", "what is", "how does", "why", "describe",
             "can you", "could you", "would you", "please", "help me understand"
@@ -459,13 +521,13 @@ class Reasoner:
         
         if any(pattern in user_lower for pattern in conversational_patterns):
             return {
-                "intent": "conversation",
+                "intent": "general_query",
                 "requires_internet": False,
                 "requires_permission": [],
                 "actions": [],
-                "params": {},
-                "confidence": "low",
-                "use_llm": True
+                "params": {"response": handle_general_query()},
+                "confidence": "high",
+                "use_llm": False
             }
         
         # Contextual search routing - file vs web
@@ -513,13 +575,13 @@ class Reasoner:
         
         if not scores:
             return {
-                "intent": "conversation",
+                "intent": "general_query",
                 "requires_internet": False,
                 "requires_permission": [],
                 "actions": [],
-                "params": {},
-                "confidence": "low",
-                "use_llm": True
+                "params": {"response": handle_general_query()},
+                "confidence": "high",
+                "use_llm": False
             }
         
         # Get best matching tool
@@ -529,13 +591,13 @@ class Reasoner:
         # Lower LLM escalation threshold - trust tool if ANY match exists
         if scores[best_tool] == 0:
             return {
-                "intent": "conversation",
+                "intent": "general_query",
                 "requires_internet": False,
                 "requires_permission": [],
                 "actions": [],
-                "params": {},
-                "confidence": "low",
-                "use_llm": True
+                "params": {"response": handle_general_query()},
+                "confidence": "high",
+                "use_llm": False
             }
         
         return {

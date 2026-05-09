@@ -177,7 +177,8 @@ class SystemTools:
             function=self.search_web,
             parameters=[
                 ToolParameter(name="query", type="string", required=True),
-                ToolParameter(name="engine", type="string", required=False, default="google")
+                ToolParameter(name="engine", type="string", required=False, default="google"),
+                ToolParameter(name="browser", type="string", required=False, default=None),
             ],
             risk_level=RiskLevel.SAFE,
             permissions_required=["open_browser"],
@@ -709,15 +710,24 @@ class SystemTools:
             return {"success": False, "error": str(e)}
     
 
-    def search_web(self, query: str, engine: str = "google") -> str:
-        """Search for something on the web."""
+    def search_web(self, query: str, engine: str = "google", browser: str = None) -> str:
+        """Search for something on the web.
+
+        Args:
+            query:   Search query string.
+            engine:  Search engine to use (google, bing, duckduckgo, brave).
+            browser: Optional canonical browser name to use (chrome, brave, edge…).
+                     When provided (e.g. from ExecutionContext), the search opens
+                     in that specific browser instead of the system default.
+        """
         try:
             from .browser_automation import BrowserAutomation
-            browser = BrowserAutomation(debug=self.debug)
-            
-            success, message = browser.search(query, engine)
+            browser_auto = BrowserAutomation(debug=self.debug)
+
+            success, message = browser_auto.search(query, engine, preferred_browser=browser)
             if success:
-                return f"✓ Searching for '{query}' on {engine}"
+                browser_label = browser.title() if browser else browser_auto.browser_name
+                return f"✓ Searching for '{query}' on {engine} in {browser_label}"
             else:
                 return f"✗ Error: {message}"
         except Exception as e:

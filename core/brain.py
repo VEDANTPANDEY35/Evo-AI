@@ -16,6 +16,8 @@ from .planner import DeterministicPlanner
 from .environment import EnvironmentManager
 from .verifier import ExecutionVerifier
 from .debugger import Debugger, DebugReport
+from .context.execution_context import ExecutionContext
+from .extraction.parameter_extractor import ParameterExtractor
 
 
 @dataclass
@@ -32,6 +34,7 @@ class StructuredPlan:
     is_conversational: bool = False
     original_text: str = ""
     debug_report: Optional[Any] = None  # DebugReport if debugger activated
+    conversational_response: Optional[str] = None  # Pre-built response for general_query / greeting
 
 
 @dataclass
@@ -72,6 +75,7 @@ class Brain:
         self.environment = EnvironmentManager()
         self.verifier = ExecutionVerifier(debug=debug)
         self.debugger = Debugger(debug=debug)
+        self._extractor = ParameterExtractor(debug=debug)
         self.debug = debug
         self.local_available = self.llm.check_local_available()
         
@@ -232,6 +236,10 @@ class Brain:
         
         # Fast-path: Simple responses (greetings, thanks)
         if analysis["intent"] in ["greeting", "thanks"]:
+            if analysis["intent"] == "thanks":
+                canned = "You're welcome! Let me know if you need anything else."
+            else:
+                canned = "Hello! How can I help you today?"
             return StructuredPlan(
                 steps=[],
                 risk_level="low",
@@ -239,10 +247,24 @@ class Brain:
                 confidence=1.0,
                 is_compound=False,
                 is_conversational=True,
-                original_text=text
+                original_text=text,
+                conversational_response=canned
             )
         
-        # Conversational queries
+        # Conversational fallback — deterministic response, no LLM
+        if analysis["intent"] == "general_query":
+            return StructuredPlan(
+                steps=[],
+                risk_level="low",
+                permissions_required=[],
+                confidence=1.0,
+                is_compound=False,
+                is_conversational=True,
+                original_text=text,
+                conversational_response=analysis.get("params", {}).get("response", "")
+            )
+        
+        # Conversational queries (LLM path — only reached if use_llm=True)
         if analysis.get("use_llm") or analysis["intent"] == "conversation":
             return StructuredPlan(
                 steps=[],
@@ -323,24 +345,18 @@ class Brain:
         
         # Handle conversational plans
         if plan.is_conversational:
-            # Handle greetings
-            if "hi" in plan.original_text.lower() or "hello" in plan.original_text.lower():
+            # If a pre-built deterministic response is available, return it immediately.
+            # This covers: greetings, thanks, general_query (handle_general_query output).
+            # No LLM call, no execution, no resolver.
+            if plan.conversational_response:
                 return ExecutionResult(
                     success=True,
                     completed_steps=0,
                     total_steps=0,
-                    message="Hello! How can I help you today?"
+                    message=plan.conversational_response
                 )
             
-            if "thank" in plan.original_text.lower():
-                return ExecutionResult(
-                    success=True,
-                    completed_steps=0,
-                    total_steps=0,
-                    message="You're welcome! Let me know if you need anything else."
-                )
-            
-            # LLM conversation
+            # LLM conversation (only reached when use_llm=True path was taken)
             if not self.local_available:
                 return ExecutionResult(
                     success=False,
@@ -387,12 +403,39 @@ class Brain:
         completed = 0
         total = len(plan.steps)
         
+        # ── Execution Context ────────────────────────────────────────────────
+        # Created fresh for each plan execution.  Tracks which browser was
+        # opened so subsequent search_web steps can target the same browser.
+        # Discarded when execute_plan() returns — no persistent state.
+        exec_ctx = ExecutionContext()
+        
+        # Pre-seed context from the original command text so that even the
+        # first search step in a compound plan knows which browser was requested.
+        if plan.original_text:
+            detected_browser = self._extractor.detect_browser(plan.original_text.lower())
+            if detected_browser:
+                exec_ctx.set_active_browser(detected_browser)
+                self._log(f"ExecutionContext pre-seeded: browser={detected_browser!r}")
+        
         for step in plan.steps:
             step_num = step.get("step_number", completed + 1)
             actions = step.get("actions", [])
             params = step.get("params", {})
             
             for action in actions:
+                # ── Context injection ────────────────────────────────────────
+                # If a browser is active in this workflow and the current action
+                # is a web search, inject the browser name so it opens in the
+                # same browser that was launched earlier.
+                if action == "search_web" and exec_ctx.has_active_browser():
+                    if not params.get("browser"):
+                        params = dict(params)
+                        params["browser"] = exec_ctx.get_active_browser()
+                        self._log(
+                            f"ExecutionContext: injecting browser={params['browser']!r} "
+                            f"into search_web params"
+                        )
+                
                 # Create verification step
                 verification_step = {"action": action, "params": params}
                 
@@ -412,6 +455,18 @@ class Brain:
                 # EXECUTE: Run the action
                 self._log(f"Executing step {step_num}: {action}")
                 result = self.executor.execute_action(action, params)
+                
+                # ── Context update ───────────────────────────────────────────
+                # After a successful open_application, record the app/browser
+                # in the execution context for downstream steps.
+                if action == "open_application" and result and "✓" in str(result):
+                    app_name = params.get("app_name", "")
+                    exec_ctx.set_active_app(app_name)
+                    # Check if the opened app is a browser
+                    detected = self._extractor.detect_browser(app_name.lower())
+                    if detected:
+                        exec_ctx.set_active_browser(detected)
+                        self._log(f"ExecutionContext updated: browser={detected!r}")
                 
                 # POST-CHECK: Verify execution
                 ok, reason = self.verifier.post_check(verification_step, result, self.environment)

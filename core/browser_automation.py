@@ -126,66 +126,101 @@ class BrowserAutomation:
         
         return template.format(encoded_query)
     
-    def open_url(self, url: str, use_preferred: bool = True) -> Tuple[bool, str]:
+    def _find_browser_by_name(self, name: str) -> Optional[str]:
+        """
+        Find the executable path for a specific browser by canonical name.
+
+        Args:
+            name: Canonical browser name (chrome, brave, edge, firefox…)
+
+        Returns:
+            Full path to the executable, or None if not found.
+        """
+        name = name.lower().strip()
+        paths = self.BROWSER_PATHS.get(self.platform, [])
+        for path in paths:
+            if name in path.lower() and os.path.exists(path):
+                self._log(f"Found {name!r} at: {path}")
+                return path
+        self._log(f"Browser {name!r} not found on this system")
+        return None
+
+    def open_url(self, url: str, use_preferred: bool = True,
+                 preferred_browser: Optional[str] = None) -> Tuple[bool, str]:
         """
         Open URL in browser.
-        
+
         Args:
-            url: URL to open
-            use_preferred: Try to use preferred browser (Brave/Chrome) if available
-        
+            url:               URL to open.
+            use_preferred:     Try to use preferred browser (Brave/Chrome) if available.
+            preferred_browser: Optional canonical browser name to use instead of the
+                               auto-detected preferred browser.  Supplied by
+                               ExecutionContext for workflow continuity.
+
         Returns:
             (success, message)
         """
         try:
-            if use_preferred and self.browser_path:
-                # Try to open in preferred browser
+            # Resolve which browser path to use
+            browser_path = None
+            browser_label = "default browser"
+
+            if preferred_browser:
+                # Caller explicitly requested a specific browser (ExecutionContext)
+                browser_path = self._find_browser_by_name(preferred_browser)
+                browser_label = preferred_browser.title() if browser_path else "default browser"
+            elif use_preferred and self.browser_path:
+                browser_path = self.browser_path
+                browser_label = self.browser_name
+
+            if browser_path:
                 try:
                     if self.platform == "Windows":
-                        subprocess.Popen([self.browser_path, url])
+                        subprocess.Popen([browser_path, url])
                     elif self.platform == "Darwin":
-                        subprocess.Popen(["open", "-a", self.browser_path, url])
+                        subprocess.Popen(["open", "-a", browser_path, url])
                     else:  # Linux
-                        subprocess.Popen([self.browser_path, url])
-                    
-                    self._log(f"Opened in {self.browser_name}: {url}")
-                    return True, f"Opened in {self.browser_name}"
-                    
+                        subprocess.Popen([browser_path, url])
+
+                    self._log(f"Opened in {browser_label}: {url}")
+                    return True, f"Opened in {browser_label}"
+
                 except Exception as e:
-                    self._log(f"{self.browser_name} launch failed: {e}, falling back to default")
-            
+                    self._log(f"{browser_label} launch failed: {e}, falling back to default")
+
             # Fallback to default browser
             webbrowser.open(url)
             self._log(f"Opened in default browser: {url}")
             return True, "Opened in default browser"
-            
+
         except Exception as e:
             self._log(f"Error opening URL: {e}")
             return False, f"Error: {e}"
-    
-    def search(self, query: str, engine: str = "google", 
-               use_preferred: bool = True) -> Tuple[bool, str]:
+
+    def search(self, query: str, engine: str = "google",
+               use_preferred: bool = True,
+               preferred_browser: Optional[str] = None) -> Tuple[bool, str]:
         """
         Perform web search.
-        
+
         Args:
-            query: Search query
-            engine: Search engine to use
-            use_preferred: Try to use preferred browser (Brave/Chrome) if available
-        
+            query:             Search query.
+            engine:            Search engine to use.
+            use_preferred:     Try to use preferred browser (Brave/Chrome) if available.
+            preferred_browser: Optional canonical browser name (from ExecutionContext).
+
         Returns:
             (success, message)
         """
-        # Build search URL
         search_url = self.build_search_url(query, engine)
-        
-        # Open in browser
-        success, message = self.open_url(search_url, use_preferred)
-        
+        success, message = self.open_url(
+            search_url,
+            use_preferred=use_preferred,
+            preferred_browser=preferred_browser,
+        )
         if success:
             return True, f"Searching for '{query}' on {engine}"
-        else:
-            return False, message
+        return False, message
     
     def open_website(self, url: str, use_preferred: bool = True) -> Tuple[bool, str]:
         """

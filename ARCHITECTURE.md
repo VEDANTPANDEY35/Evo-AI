@@ -2,7 +2,7 @@
 
 > **Offline-first AI Desktop Assistant with System Control**
 
-**Version:** 2.1.0  
+**Version:** 2.2.0  
 **Status:** Production Ready  
 **Platform:** Windows, macOS, Linux
 
@@ -14,11 +14,14 @@
 2. [Quick Start](#quick-start)
 3. [System Architecture](#system-architecture)
 4. [🔥 NEW: Resolution Layer (Input Intelligence)](#-new-resolution-layer-input-intelligence)
-5. [Core Components](#core-components)
-6. [Features](#features)
-7. [Usage Guide](#usage-guide)
-8. [Development](#development)
-9. [Testing](#testing)
+5. [Conversational Fallback Layer](#conversational-fallback-layer)
+6. [Parameter Extraction Layer](#parameter-extraction-layer)
+7. [Execution Context Layer](#execution-context-layer)
+8. [Core Components](#core-components)
+9. [Features](#features)
+10. [Usage Guide](#usage-guide)
+11. [Development](#development)
+12. [Testing](#testing)
 
 ---
 
@@ -467,6 +470,274 @@ Meaningful typos still get relevant suggestions:
 |------|--------|
 | `core/reasoning.py` | Normalizer + resolver imports; OPEN block uses `category`/`confidence` to route; low-confidence fallback attaches `fallback_info` instead of silently searching |
 | `core/tools.py` | `open_website` accepts pre-resolved URL; `open_application` uses `resolved_path`; no silent web-search fallback |
+
+---
+
+## Conversational Fallback Layer
+
+> Added in v2.1.1 as part of the bug fix + UX polish pass.
+
+### Purpose
+
+Handles non-action queries (greetings, identity questions, capability questions,
+random text) with a safe, deterministic response. Bypasses the entire execution
+pipeline — no resolver, no planner, no executor, no LLM.
+
+### Location
+
+`core/reasoning.py` — `handle_general_query()` (module-level function)
+
+### How It Works
+
+```
+User Input
+    |
+    v
+InputNormalizer
+    |
+    v
+Reasoner.analyze_request()
+    |
+    +-- Priority 1-5: System / process / action commands ──> normal pipeline
+    |
+    +-- Priority 6: _is_conversational() == True
+    |       AND _is_system_related() == False
+    |               |
+    |               v
+    |       handle_general_query()
+    |               |
+    |               v
+    |       Returns deterministic string response
+    |       intent = "general_query"
+    |       use_llm = False
+    |       actions = []
+    |
+    +-- _enhanced_pattern_match() conversational check ──> same fallback
+```
+
+### Trigger Conditions
+
+The fallback activates when **any** of the following are true:
+
+- Input matches `_is_conversational()`:
+  - Short greetings: `hi`, `hello`, `hey`, `yo`, `sup`
+  - Conversational starters: `tell me`, `explain`, `what is`, `how does`,
+    `why`, `describe`, `can you`, `could you`, `would you`, `please`,
+    `help me understand`, `what games`, `what can i`, `recommend`, `suggest`
+  - Question words (`what`, `why`, `how`, `when`, `where`, `who`, `which`)
+    when no system/file/process keyword is present
+- No tool keyword scores > 0 in `_enhanced_pattern_match()`
+- Input is empty or unrecognisable
+
+### What It Does NOT Do
+
+- Does **not** call the resolver or planner
+- Does **not** call the executor or verifier
+- Does **not** trigger the debugger
+- Does **not** use the LLM (`use_llm` is always `False`)
+- Does **not** modify system state
+
+### Response
+
+```
+I am Evo-AI. I can help you with tasks like:
+  - Opening applications
+  - Searching the web
+  - Executing system commands safely
+
+Try commands like:
+  open chrome
+  open something for coding
+  open youtube
+```
+
+### Integration in Brain
+
+`Brain.generate_plan()` detects `intent == "general_query"` and returns a
+`StructuredPlan` with `is_conversational=True` and the pre-built string stored
+in `conversational_response`. `Brain.execute_plan()` returns it directly as an
+`ExecutionResult` without touching the executor.
+
+### Next Phase Preparation
+
+The `next_actions` list in `DebugReport` (from the Debugger layer) is already
+structured for interactive selection. The next phase — **Interactive Suggestions
+Selection** — will allow the CLI to present `next_actions` as numbered choices
+the user can pick from, rather than displaying them as plain text. No changes to
+the Conversational Fallback Layer are required for that phase.
+
+---
+
+## Parameter Extraction Layer
+
+> Added in v2.2.0 to fix missing structured parameters for file-search and web-search commands.
+
+### Problem Solved
+
+Before this layer, commands like `"find all python files in Documents"` correctly
+detected `search_files` intent but produced empty `pattern` and `directory` params,
+causing the tool to return "No search pattern provided".
+
+### Location
+
+`core/extraction/parameter_extractor.py`  
+`core/extraction/__init__.py`
+
+### Integration Point
+
+```
+Input → Normalizer → Resolver → ParameterExtractor (HERE) → Planner → Executor
+```
+
+Called inside `Reasoner.analyze_request()` as a post-resolution enrichment step.
+The public method `analyze_request()` calls `_analyze_request_inner()` (all routing
+logic) then passes the result through `_enrich_params()` before returning.
+
+### What It Does
+
+Converts natural-language intent strings into structured, typed parameter dicts.
+Only fills in keys that are **missing** — never overwrites values already set by
+the resolver.
+
+**File type mapping** (natural word → glob pattern):
+```
+python → *.py       pdf → *.pdf       image → *.{png,jpg,...}
+video  → *.{mp4,…}  txt → *.txt       markdown → *.md
+… (50+ entries)
+```
+
+**Directory mapping** (natural name → absolute path):
+```
+Documents → ~/Documents    Downloads → ~/Downloads
+Desktop   → ~/Desktop      Pictures  → ~/Pictures
+Videos    → ~/Videos       Music     → ~/Music
+```
+
+**Search query extraction** (strips verb prefixes):
+```
+"search for spotify"        → query="spotify"
+"google machine learning"   → query="machine learning"
+```
+
+**Process name extraction**:
+```
+"kill chrome"   → name="chrome"
+"stop notepad"  → name="notepad"
+```
+
+### Examples
+
+| Input | Tool | Extracted Params |
+|---|---|---|
+| `find all python files in Documents` | `search_files` | `{pattern: "*.py", directory: "~/Documents"}` |
+| `find pdf files in Downloads` | `search_files` | `{pattern: "*.pdf", directory: "~/Downloads"}` |
+| `search images on Desktop` | `search_files` | `{pattern: "*.{png,jpg,...}", directory: "~/Desktop"}` |
+| `search for spotify` | `search_web` | `{query: "spotify"}` |
+
+### Rules
+
+- No LLM — all logic is regex + deterministic lookup tables
+- Never executes anything
+- Returns structured dicts only
+- Lightweight — no I/O, no subprocess calls
+
+---
+
+## Execution Context Layer
+
+> Added in v2.2.0 to fix browser continuity in multi-step workflows.
+
+### Problem Solved
+
+Before this layer, `"open chrome and search spotify"` opened Chrome correctly but
+then opened the Spotify search in the system-default browser (Brave) instead of
+Chrome, because the two steps had no shared state.
+
+### Location
+
+`core/context/execution_context.py`
+
+### Design
+
+```python
+ctx = ExecutionContext()   # created fresh per plan execution
+ctx.set_active_browser("chrome")
+ctx.get_active_browser()  # → "chrome"
+ctx.reset()               # clears all state
+```
+
+**Rules:**
+- Context exists **only during workflow execution** — created in `Brain.execute_plan()`,
+  discarded when the method returns
+- No long-term memory, no persistence, no global variables
+- Context must be explicitly passed — never imported as a singleton
+- No autonomous state tracking — state is set only by explicit calls from Brain
+
+### Integration in Brain.execute_plan()
+
+```
+Plan execution starts
+    │
+    ├─ ExecutionContext created (fresh, empty)
+    │
+    ├─ Pre-seed: ParameterExtractor.detect_browser(original_text)
+    │       → if browser found in command text, set in context immediately
+    │         so even the first search step targets the right browser
+    │
+    ├─ For each step:
+    │       ├─ action == "search_web" AND context.has_active_browser()
+    │       │       → inject params["browser"] = context.get_active_browser()
+    │       │
+    │       ├─ Execute action
+    │       │
+    │       └─ action == "open_application" AND result contains "✓"
+    │               → detect_browser(app_name)
+    │               → if browser: context.set_active_browser(browser)
+    │
+    └─ ExecutionContext goes out of scope — no state leaks between commands
+```
+
+### Browser Continuity Example
+
+```
+"open chrome and search spotify"
+
+Step 1: open_application("chrome")
+    → ExecutionContext.set_active_browser("chrome")
+
+Step 2: search_web(query="spotify")
+    → Brain injects: params["browser"] = "chrome"
+    → BrowserAutomation.search(..., preferred_browser="chrome")
+    → Finds chrome.exe path, launches Chrome with search URL
+    → Result: Spotify search opens IN Chrome ✓
+```
+
+### Context Isolation
+
+Each call to `Brain.execute_plan()` creates a new `ExecutionContext` instance.
+Separate commands never share browser state.
+
+```
+Command 1: "open chrome and search spotify"  → ctx1 (chrome) → discarded
+Command 2: "open edge and search youtube"    → ctx2 (edge)   → discarded
+Command 3: "search github"                   → ctx3 (empty)  → uses default browser
+```
+
+### Updated search_web Tool
+
+`search_web` now accepts an optional `browser` parameter:
+
+```python
+search_web(query="spotify", browser="chrome")
+# → opens search in Chrome specifically
+
+search_web(query="spotify")
+# → falls back to default browser behavior (unchanged)
+```
+
+`BrowserAutomation.search()` and `open_url()` accept `preferred_browser` to
+look up the specific browser path from `BROWSER_PATHS` before falling back to
+the system default.
 
 ---
 
