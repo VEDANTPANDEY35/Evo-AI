@@ -182,3 +182,4 @@
 {"timestamp": "2026-05-09T08:28:46.879078", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "chrome.exe"}}
 {"timestamp": "2026-05-09T08:29:01.599122", "action": "open_application", "permission": "open_app", "response": "allow_always", "reason": "Pre-granted", "context": {"app_name": "chrome.exe"}}
 {"timestamp": "2026-05-09T08:29:02.112284", "action": "search_web", "permission": "open_browser", "response": "allow_always", "reason": "Pre-granted", "context": {"query": "spotify"}}
+{"timestamp": "2026-05-28T15:34:11.520922", "action": "open_website", "permission": "open_browser", "response": "allow_always", "reason": "Pre-granted", "context": {"site_name": "github", "url": "https://github.com"}}

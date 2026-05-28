@@ -1,0 +1,1 @@
+{"timestamp": "2026-05-28T15:31:47.312596", "action": "open_website", "permission": "open_browser", "response": "allow_always", "reason": "Pre-granted", "context": {"site_name": "spotify", "url": "https://open.spotify.com"}}

@@ -8,19 +8,37 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Virtual environments
+.venv/
 venv/
 env/
 ENV/
+
+# Pytest
+.pytest_cache/
 
 # Logs
 logs/
 *.log
 
-# Screenshots
+# Runtime audit/state
+config/permission_audit.jsonl
+
+# Screenshots / generated media
 screenshots/
-*.png
-*.jpg
-*.jpeg
+
+# Databases / cache
+*.db
+*.sqlite3
+
+# Build artifacts
+dist/
+build/
+
+# Coverage
+.coverage
+htmlcov/
 
 # IDE
 .vscode/
@@ -32,8 +50,5 @@ screenshots/
 .DS_Store
 Thumbs.db
 
-# Config (keep templates)
-config/settings.json
-config/system_paths.json
-
+# Archives
 *.tar
