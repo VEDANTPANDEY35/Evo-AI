@@ -2,7 +2,7 @@
 
 > **Offline-first AI Desktop Assistant with System Control**
 
-**Version:** 2.2.0  
+**Version:** 2.3.0  
 **Status:** Production Ready  
 **Platform:** Windows, macOS, Linux
 
@@ -15,13 +15,14 @@
 3. [System Architecture](#system-architecture)
 4. [🔥 NEW: Resolution Layer (Input Intelligence)](#-new-resolution-layer-input-intelligence)
 5. [Conversational Fallback Layer](#conversational-fallback-layer)
-6. [Parameter Extraction Layer](#parameter-extraction-layer)
-7. [Execution Context Layer](#execution-context-layer)
-8. [Core Components](#core-components)
-9. [Features](#features)
-10. [Usage Guide](#usage-guide)
-11. [Development](#development)
-12. [Testing](#testing)
+6. [Overlay UX Evolution](#overlay-ux-evolution)
+7. [Parameter Extraction Layer](#parameter-extraction-layer)
+8. [Execution Context Layer](#execution-context-layer)
+9. [Core Components](#core-components)
+10. [Features](#features)
+11. [Usage Guide](#usage-guide)
+12. [Development](#development)
+13. [Testing](#testing)
 
 ---
 
@@ -565,6 +566,229 @@ structured for interactive selection. The next phase — **Interactive Suggestio
 Selection** — will allow the CLI to present `next_actions` as numbered choices
 the user can pick from, rather than displaying them as plain text. No changes to
 the Conversational Fallback Layer are required for that phase.
+
+---
+
+## Overlay UX Evolution
+
+> Added in v2.3.0. Transforms the original Tkinter prototype into a modern,
+> minimal, keyboard-first AI command interface.
+
+### Design Language
+
+| Token | Value | Purpose |
+|---|---|---|
+| Background | `#0F1115` | Deep dark, cinematic |
+| Accent | `#7C6AF7` | Soft violet — calm, intelligent |
+| Success | `#4ADE80` | Confirmed execution |
+| Warning | `#FBBF24` | Executing / caution |
+| Error | `#F87171` | Failure state |
+| Font | Segoe UI 10–13pt | Clean, readable, system-native |
+
+Window: 560px wide, borderless, always-on-top, draggable.
+Positioned at 32% from top (Spotlight feel, not dead-centre).
+
+---
+
+### UI State Machine
+
+Eight explicit states drive both the interaction dots and the microcopy:
+
+```
+┌──────────┐   keypress    ┌───────────┐   Enter     ┌──────────┐
+│   IDLE   │ ────────────► │ LISTENING │ ──────────► │ THINKING │
+└──────────┘               └───────────┘             └────┬─────┘
+     ▲                                                     │ plan ready
+     │ Escape / Cancel                                     ▼
+     │                                              ┌──────────────┐
+     │                                              │   APPROVAL   │
+     │                                              └──────┬───────┘
+     │                                                     │ Execute
+     │                                                     ▼
+     │                                              ┌──────────────┐
+     │                                              │  EXECUTING   │
+     │                                              └──────┬───────┘
+     │                                                     │
+     │                              ┌──────────┐           │
+     │◄─────────────────────────────│  SUCCESS │◄──────────┤
+     │                              └──────────┘           │
+     │                              ┌──────────┐           │
+     └──────────────────────────────│  ERROR   │◄──────────┘
+                                    └──────────┘
+
+Debugger path:
+  THINKING → DEBUGGER (when debug_report present)
+           → user selects suggestion
+           → APPROVAL → EXECUTING → SUCCESS/ERROR
+```
+
+State → microcopy mapping:
+
+| State | Dots | Microcopy |
+|---|---|---|
+| IDLE | breathing cluster | *(empty)* |
+| LISTENING | pulse outward | Listening… |
+| THINKING | orbit | Working on it… |
+| APPROVAL | stabilised | Ready to execute |
+| EXECUTING | stabilised amber | Running… |
+| SUCCESS | stabilised green | Done |
+| DEBUGGER | stabilised amber | I found a few possibilities |
+| ERROR | stabilised red | Something went wrong |
+
+---
+
+### Interaction Dots System
+
+Three dots rendered on a Tkinter Canvas. Animation runs via `root.after()`
+at 60ms intervals — no threads, no blocking.
+
+```
+IDLE       ●  ●  ●   gentle breathing (sin wave, slow)
+LISTENING  ●  ●  ●   sequential pulse outward
+THINKING   ↻  ↻  ↻   orbital motion (3 phases, 120° apart)
+APPROVAL   ●  ●  ●   stabilised, violet
+EXECUTING  ●  ●  ●   stabilised, amber
+SUCCESS    ●  ●  ●   stabilised, green
+ERROR      ●  ●  ●   stabilised, red
+```
+
+CPU cost: negligible — only trig math + 3 canvas item updates per frame.
+
+---
+
+### Structured Plan Card
+
+When a plan is generated, the controller calls `window.show_plan(plan_text)`.
+The window parses the plan text and renders clean step rows:
+
+```
+┌─────────────────────────────────────────┐
+│  Working on it…                         │  ← dots (thinking)
+├─────────────────────────────────────────┤
+│  Ready to execute                       │  ← microcopy (approval)
+│                                         │
+│  [1]  Opening Chrome                    │  ← step row
+│  [2]  Searching Spotify                 │  ← step row
+│                                         │
+│  [ Execute ]   [ Cancel ]               │  ← button row
+└─────────────────────────────────────────┘
+```
+
+Step labels use human microcopy (not raw tool names):
+
+| Tool | Label |
+|---|---|
+| `open_application` | Opening {app} |
+| `search_web` | Searching {query} |
+| `get_system_info` | Reading system info |
+| `take_screenshot` | Taking a screenshot |
+| `search_files` | Searching files for {pattern} |
+
+---
+
+### Debugger Suggestion UI
+
+When `plan.debug_report` is present, the controller calls
+`window.show_debugger(message, suggestions, actions)`:
+
+```
+┌─────────────────────────────────────────┐
+│  I found a few possibilities            │  ← message
+│                                         │
+│ ▶  Open application: spotify            │  ← selected (highlighted)
+│    Search web for: spotfy               │
+│                                         │
+│  [ Select ]   [ Cancel ]                │
+└─────────────────────────────────────────┘
+```
+
+Navigation:
+- `↑` / `↓` — move selection
+- `Enter` — confirm (builds a new plan, shows plan card — NO auto-execution)
+- `Escape` — close overlay
+- Mouse click — select row
+
+No action is ever auto-executed from the debugger. The user always sees the
+plan card and presses Execute explicitly.
+
+---
+
+### Keyboard-First Design
+
+| Key | Action |
+|---|---|
+| `Ctrl+Space` | Toggle overlay (global hotkey) |
+| `Enter` | Submit command / confirm suggestion |
+| `↑` / `↓` | Navigate suggestions |
+| `Escape` | Close overlay |
+| `Tab` | (reserved for future field navigation) |
+
+---
+
+### Fade Transitions
+
+```python
+FADE_STEPS = 12
+FADE_MS    = 18   # ms per step → ~216ms total
+```
+
+Show: alpha 0.0 → 0.96 over ~216ms
+Hide: alpha 0.96 → 0.0 → window.withdraw()
+
+Implemented via `root.after()` — never blocks the UI thread.
+
+---
+
+### Window Expansion
+
+```
+Collapsed (input only):  560 × 72px
+Plan card:               560 × 320px
+Debugger card:           560 × 280px
+```
+
+Expansion is instant (geometry change) — no animation needed since the
+fade-in already provides the transition feel.
+
+---
+
+### Full Interaction Flow
+
+```
+Ctrl+Space
+    │
+    ▼ fade-in (216ms)
+┌─────────────────────────────────────────┐
+│  ● ● ●  [________________________]  ↵  │  ← IDLE
+└─────────────────────────────────────────┘
+    │ user types
+    ▼ dots pulse (LISTENING)
+    │ Enter
+    ▼ dots orbit (THINKING) — Brain.generate_plan() in thread
+    │
+    ├─ debug_report? → DEBUGGER card → user selects → APPROVAL card
+    │
+    └─ plan ready → APPROVAL card
+                        │ Execute
+                        ▼ EXECUTING (amber dots)
+                        │ Brain.execute_plan() in thread
+                        ▼ SUCCESS / ERROR card
+                        │ Escape
+                        ▼ fade-out → hidden
+```
+
+---
+
+### PySide6 Migration Path
+
+All design tokens, state strings, and animation constants are isolated at the
+top of `overlay_window.py`. The `InteractionDots` class uses only a canvas
+abstraction (create_oval / coords / itemconfig). To migrate:
+
+1. Replace `tk.Canvas` with `QGraphicsScene` / `QPainter`
+2. Replace `root.after()` with `QTimer`
+3. Replace `tk.Entry` / `tk.Label` / `tk.Button` with Qt equivalents
+4. Keep `UIState`, `InteractionDots._dot_positions()`, and all constants unchanged
 
 ---
 

@@ -1,72 +1,67 @@
 """
-Evo-AI Windows Overlay - Main Entry Point
-Minimal Tkinter-based overlay prototype.
+Evo-AI Overlay — Main entry point.
+
+Starts the Brain, creates the modern overlay window, registers the global
+hotkey (Ctrl+Space), and enters the Tkinter event loop.
+
+Architecture note:
+  Brain is initialised once and shared via OverlayController.
+  The UI thread never calls Brain directly — all AI work runs in daemon threads
+  and posts results back via root.after().
 """
 import sys
 import os
 import tkinter as tk
 
-# Add parent directory to path to import core modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add parent directory so core modules are importable
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from core.brain import Brain
+from core.brain    import Brain
 from core.reasoning import Reasoner
-from core.executor import Executor
+from core.executor  import Executor
 from core.llm_client import LLMClient
-from core.memory import Memory
+from core.memory    import Memory
 
 from overlay_window import OverlayWindow
-from controller import OverlayController
+from controller     import OverlayController
 import hotkey
 
 
 def main():
-    """
-    Initialize Brain and start Tkinter overlay.
-    """
-    print("Initializing Evo-AI Overlay...")
-    
-    # Initialize core components (unchanged)
-    reasoner = Reasoner(debug=False)
-    executor = Executor(debug=False)
+    print("Starting Evo-AI Overlay…")
+
+    # ── Core components (unchanged) ───────────────────────────────────────────
+    reasoner   = Reasoner(debug=False)
+    executor   = Executor(debug=False)
     llm_client = LLMClient(debug=False)
-    memory = Memory(debug=False)
-    
-    # Initialize Brain (unchanged)
+    memory     = Memory(debug=False)
+
     brain = Brain(
         reasoner=reasoner,
         executor=executor,
         llm_client=llm_client,
         memory=memory,
-        debug=False
+        debug=False,
     )
-    
-    print("Brain initialized successfully")
-    
-    # Create Tkinter root
+    print("Brain ready")
+
+    # ── Tkinter root ──────────────────────────────────────────────────────────
     root = tk.Tk()
-    
-    # Start hidden
-    root.withdraw()
-    
-    # Create UI window
-    window = OverlayWindow(root)
-    
-    # Create controller (connects UI to Brain)
+    root.withdraw()   # hidden until hotkey
+
+    # ── UI + Controller ───────────────────────────────────────────────────────
+    window     = OverlayWindow(root)
     controller = OverlayController(window, brain)
-    
-    # Register global hotkey (Ctrl+Space)
+
+    # ── Global hotkey ─────────────────────────────────────────────────────────
     hotkey.register_hotkey(controller)
-    
-    print("Overlay ready - Press Ctrl+Space to show")
-    
+    print("Ready — press Ctrl+Space to open")
+
     try:
-        # Start Tkinter main loop
         root.mainloop()
     finally:
-        # Cleanup hotkeys on exit
         hotkey.unregister_all()
-    
+
     print("Overlay closed")
 
 
